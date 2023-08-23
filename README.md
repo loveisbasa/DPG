@@ -25,7 +25,7 @@ Ex) CUDA 10.2 with pytorch 1.7.0
 
 <br />
 
-## Getting started 
+## Getting started
 
 ### 1) Clone the repository
 
@@ -93,13 +93,20 @@ docker run -it --rm --gpus=all dps-docker
 
 ### 4) Inference
 
+Currently DPG supports Inpainting, super-resolution, Gaussian and Motion debluring tasks, more task will be added soon.
+
+To run DPG for super-resolution:
+
+
 ```
-python3 sample_condition.py \
---model_config=configs/model_config.yaml \
---diffusion_config=configs/diffusion_config.yaml \
---task_config={TASK-CONFIG};
+python3 sample_condition.py --model_config=configs/model_config.yaml --diffusion_config=configs/phase_retrieval_config.yaml --task_config=configs/super_resolution_config.yaml
 ```
 
+for inpainting
+
+```
+python3 sample_condition.py --model_config=configs/model_config.yaml --diffusion_config=configs/diffusion_config.yaml --task_config=configs/inpainting_config.yaml
+```
 
 :speaker: For imagenet, use configs/imagenet_model_config.yaml
 
@@ -155,4 +162,3 @@ year={2023},
 url={https://openreview.net/forum?id=OnD9zGAGT0k}
 }
 ```
-

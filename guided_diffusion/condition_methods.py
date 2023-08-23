@@ -112,6 +112,7 @@ class PosteriorSamplingPlus(ConditioningMethod):
 class PGSampling(ConditioningMethod):
     def __init__(self, operator, noiser, **kwargs):
         super().__init__(operator, noiser)
+        self.mc = kwargs.get('mc', 100)
         self.scale = kwargs.get('scale', 1.0)
         self.prev_grad = None
         self.beta = 0.1
@@ -130,15 +131,14 @@ class PGSampling(ConditioningMethod):
         # x_t_grad = torch.autograd.grad(outputs=norm, inputs=x_prev)[0]
 
         # method 3: policy gradient
-        mc = 200
         _, C, H, W = x_prev.shape
-        x0 = r * torch.randn((mc, C, H, W), device=x_0_hat.device) + x_0_hat
+        x0 = r * torch.randn((self.mc, C, H, W), device=x_0_hat.device) + x_0_hat
         x0.detach_()
 
         with torch.no_grad():
             difference = measurement - self.operator.forward(x0, **kwargs)
             p_0l = torch.exp(- (torch.linalg.norm(difference, dim=(1, 2, 3))**2) / Z ) # for Gaussian Distribution
-            pB = (torch.sum(p_0l) - p_0l) / (mc - 1)
+            pB = (torch.sum(p_0l) - p_0l) / (self.mc - 1)
             pB.detach_()
         log_q0t = torch.linalg.norm((x0 - x_0_hat), dim=(1, 2, 3))**2
         loss = torch.mean((p_0l-pB) * log_q0t)

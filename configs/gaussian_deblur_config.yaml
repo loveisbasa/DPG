@@ -2,6 +2,9 @@ conditioning:
   method: ps
   params:
     scale: 0.3
+  # method: pg
+  # params:
+  #   scale: 1.
 
 data:
   name: ffhq
@@ -12,7 +15,7 @@ measurement:
     name: gaussian_blur
     kernel_size: 61
     intensity: 3.0
-  
-  noise: 
+
+  noise:
     name: gaussian
     sigma: 0.05

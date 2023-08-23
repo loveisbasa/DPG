@@ -16,7 +16,7 @@ __SAMPLER__ = {}
 def register_sampler(name: str):
     def wrapper(cls):
         if __SAMPLER__.get(name, None):
-            raise NameError(f"Name {name} is already registered!") 
+            raise NameError(f"Name {name} is already registered!")
         __SAMPLER__[name] = cls
         return cls
     return wrapper
@@ -37,19 +37,19 @@ def create_sampler(sampler,
                    clip_denoised,
                    rescale_timesteps,
                    timestep_respacing=""):
-    
+
     sampler = get_sampler(name=sampler)
-    
+
     betas = get_named_beta_schedule(noise_schedule, steps)
     if not timestep_respacing:
         timestep_respacing = [steps]
-         
+
     return sampler(use_timesteps=space_timesteps(steps, timestep_respacing),
                    betas=betas,
                    model_mean_type=model_mean_type,
                    model_var_type=model_var_type,
                    dynamic_threshold=dynamic_threshold,
-                   clip_denoised=clip_denoised, 
+                   clip_denoised=clip_denoised,
                    rescale_timesteps=rescale_timesteps)
 
 
@@ -106,8 +106,8 @@ class GaussianDiffusion:
         self.mean_processor = get_mean_processor(model_mean_type,
                                                  betas=betas,
                                                  dynamic_threshold=dynamic_threshold,
-                                                 clip_denoised=clip_denoised)    
-    
+                                                 clip_denoised=clip_denoised)
+
         self.var_processor = get_var_processor(model_var_type,
                                                betas=betas)
 
@@ -119,7 +119,7 @@ class GaussianDiffusion:
         :param t: the number of diffusion steps (minus 1). Here, 0 means one step.
         :return: A tuple (mean, variance, log_variance), all of x_start's shape.
         """
-        
+
         mean = extract_and_expand(self.sqrt_alphas_cumprod, t, x_start) * x_start
         variance = extract_and_expand(1.0 - self.alphas_cumprod, t, x_start)
         log_variance = extract_and_expand(self.log_one_minus_alphas_cumprod, t, x_start)
@@ -139,7 +139,7 @@ class GaussianDiffusion:
         """
         noise = torch.randn_like(x_start)
         assert noise.shape == x_start.shape
-        
+
         coef1 = extract_and_expand(self.sqrt_alphas_cumprod, t, x_start)
         coef2 = extract_and_expand(self.sqrt_one_minus_alphas_cumprod, t, x_start)
 
@@ -173,51 +173,84 @@ class GaussianDiffusion:
                       measurement,
                       measurement_cond_fn,
                       record,
-                      save_root):
+                      save_root,
+                      writer=None,
+                      num_run=0):
         """
         The function used for sampling from noise.
-        """ 
+        """
         img = x_start
         device = x_start.device
 
         pbar = tqdm(list(range(self.num_timesteps))[::-1])
         for idx in pbar:
             time = torch.tensor([idx] * img.shape[0], device=device)
-            
+
             img = img.requires_grad_()
             out = self.p_sample(x=img, t=time, model=model)
-            
+
+            s = idx # current time
+
+            alpha_prod_cur, alpha_prod_prev, beta = self.alphas_cumprod[s], self.alphas_cumprod_prev[s], self.betas[s]
+            sigma = math.sqrt(1-alpha_prod_cur)
+            # sigma = math.sqrt((1 - alpha_prod_prev) / (1 - alpha_prod_cur) * beta) + 1e-3
+            alpha = 1 - beta
+
             # Give condition.
             noisy_measurement = self.q_sample(measurement, t=time)
 
             # TODO: how can we handle argument for different condition method?
-            img, distance = measurement_cond_fn(x_t=out['sample'],
+            img, distance, outs = measurement_cond_fn(x_t=out['sample'],
                                       measurement=measurement,
                                       noisy_measurement=noisy_measurement,
                                       x_prev=img,
-                                      x_0_hat=out['pred_xstart'])
+                                      x_0_hat=out['pred_xstart'],
+                                      r=1. * idx / self.num_timesteps,
+                                      eta=1.,
+                                      )
             img = img.detach_()
-           
-            pbar.set_postfix({'distance': distance.item()}, refresh=False)
+
+            writer.add_scalar('Loss/'+str(num_run), distance, self.num_timesteps-idx-1)
+            # writer.add_scalar('grad/norm'+str(num_run), outs['grad_norm'], self.num_timesteps-idx-1)
+            # # writer.add_scalar('p0l_mu_var/mean'+str(num_run), p_0l_mu, self.num_timesteps-idx-1)
+            # writer.add_scalar('p0l_mu_var/mean'+str(num_run), outs['p_0l'].mean(), self.num_timesteps-idx-1)
+            # # writer.add_scalar('err/mean'+str(num_run), err.mean(), self.num_timesteps-idx-1)
+            # writer.add_scalar('err/Z'+str(num_run), outs['Z'], self.num_timesteps-idx-1)
+
+            # for trial_idx in range(10):
+            #     img.requires_grad_()
+            #     out = self.p_sample(x=img, t=time, model=model)
+            #     noisy_measurement = self.q_sample(measurement, t=time)
+            #     img, distance, grad_norm = measurement_cond_fn(x_t=out['sample'],
+            #                           measurement=measurement,
+            #                           noisy_measurement=noisy_measurement,
+            #                           x_prev=img,
+            #                           x_0_hat=out['pred_xstart'],
+            #                           r=sigma,
+            #                           eta=eta)
+            #     img = img.detach_()
+            #     print(distance)
+
+            pbar.set_postfix({'distance': distance.item(), 'grad_norm': outs['grad_norm']}, refresh=False)
             if record:
                 if idx % 10 == 0:
                     file_path = os.path.join(save_root, f"progress/x_{str(idx).zfill(4)}.png")
                     plt.imsave(file_path, clear_color(img))
 
-        return img       
-        
+        return img
+
     def p_sample(self, model, x, t):
         raise NotImplementedError
 
     def p_mean_variance(self, model, x, t):
         model_output = model(x, self._scale_timesteps(t))
-        
+
         # In the case of "learned" variance, model will give twice channels.
         if model_output.shape[1] == 2 * x.shape[1]:
             model_output, model_var_values = torch.split(model_output, x.shape[1], dim=1)
         else:
-            # The name of variable is wrong. 
-            # This will just provide shape information, and 
+            # The name of variable is wrong.
+            # This will just provide shape information, and
             # will not be used for calculating something important in variance.
             model_var_values = model_output
 
@@ -231,7 +264,7 @@ class GaussianDiffusion:
                 'log_variance': model_log_variance,
                 'pred_xstart': pred_xstart}
 
-    
+
     def _scale_timesteps(self, t):
         if self.rescale_timesteps:
             return t.float() * (1000.0 / self.num_timesteps)
@@ -268,7 +301,7 @@ def space_timesteps(num_timesteps, section_counts):
         section_counts = [int(x) for x in section_counts.split(",")]
     elif isinstance(section_counts, int):
         section_counts = [section_counts]
-    
+
     size_per = num_timesteps // len(section_counts)
     extra = num_timesteps % len(section_counts)
     start_idx = 0
@@ -370,16 +403,16 @@ class DDPM(SpacedDiffusion):
         if t != 0:  # no noise when t == 0
             sample += torch.exp(0.5 * out['log_variance']) * noise
 
-        return {'sample': sample, 'pred_xstart': out['pred_xstart']}
-    
+        return {'sample': sample, 'pred_xstart': out['pred_xstart'], 'log_variance': out['log_variance']}
+
 
 @register_sampler(name='ddim')
 class DDIM(SpacedDiffusion):
     def p_sample(self, model, x, t, eta=0.0):
         out = self.p_mean_variance(model, x, t)
-        
+
         eps = self.predict_eps_from_x_start(x, t, out['pred_xstart'])
-        
+
         alpha_bar = extract_and_expand(self.alphas_cumprod, t, x)
         alpha_bar_prev = extract_and_expand(self.alphas_cumprod_prev, t, x)
         sigma = (
@@ -397,7 +430,7 @@ class DDIM(SpacedDiffusion):
         sample = mean_pred
         if t != 0:
             sample += sigma * noise
-        
+
         return {"sample": sample, "pred_xstart": out["pred_xstart"]}
 
     def predict_eps_from_x_start(self, x_t, t, pred_xstart):
@@ -472,7 +505,7 @@ def expand_as(array, target):
         array = torch.from_numpy(array)
     elif isinstance(array, np.float):
         array = torch.tensor([array])
-   
+
     while array.ndim < target.ndim:
         array = array.unsqueeze(-1)
 

@@ -84,7 +84,7 @@ class PosteriorSampling(ConditioningMethod):
     def conditioning(self, x_prev, x_t, x_0_hat, measurement, r, **kwargs):
         norm_grad, norm = self.grad_and_value(x_prev=x_prev, x_0_hat=x_0_hat, measurement=measurement, r=r, **kwargs)
         x_t -= norm_grad * self.scale
-        outs = {'norm': norm, 'grad_norm': 0.}
+        outs = {'norm': norm, 'grad_norm': norm_grad.norm().cpu().item()}
 
         return x_t, norm, outs
 
@@ -115,9 +115,10 @@ class PGSampling(ConditioningMethod):
         self.mc = kwargs.get('mc', 100)
         self.scale = kwargs.get('scale', 1.0)
         self.prev_grad = None
-        self.beta = 0.1
+        self.beta = kwargs.get('beta', 0.1)
+        self.maxloss = -1
 
-    def grad_and_value(self, x_prev, x_0_hat, measurement, r, **kwargs):
+    def grad_and_value(self, x_prev, x_0_hat, measurement, beta, **kwargs):
         # Z = 3 * 256 * 256 / 5
 
         with torch.no_grad():
@@ -125,6 +126,7 @@ class PGSampling(ConditioningMethod):
             Z = measurement - self.operator.forward(x_ref, **kwargs)
             Z = torch.linalg.norm(Z) ** 2
             r = torch.sqrt(Z / (3 * 256 * 256))
+
         # method 1: original DPS
         # difference = measurement - self.operator.forward(x_0_hat, **kwargs)
         # norm = torch.linalg.norm(difference)
@@ -148,7 +150,8 @@ class PGSampling(ConditioningMethod):
             self.prev_grad = x_t_grad
         else:
             tmp_grad = x_t_grad
-            x_t_grad = self.beta * self.prev_grad + (1 - self.beta) * tmp_grad
+            # x_t_grad = self.beta * self.prev_grad + (1 - self.beta) * tmp_grad
+            x_t_grad = self.beta * beta * self.prev_grad + (1 - self.beta * beta) * tmp_grad
             self.prev_grad = tmp_grad
 
         grad = x_t_grad / (x_t_grad.norm()+1e-7)
@@ -188,10 +191,13 @@ class PGSampling(ConditioningMethod):
         return {'x_t_grad': grad, 'norm': norm,
                 'p_0l': p_0l,
                 'Z': Z,
-                'grad_norm': x_t_grad.norm().item()}
+                'grad_norm': x_t_grad.norm().item(),
+                'r': r}
 
-    def conditioning(self, x_prev, x_t, x_0_hat, measurement, eta, **kwargs):
-        outs = self.grad_and_value(x_prev=x_prev, x_0_hat=x_0_hat, measurement=measurement, **kwargs)
-        x_t -= eta * outs['x_t_grad']
+    def conditioning(self, x_prev, x_t, x_0_hat, measurement, eta, beta, **kwargs):
+        outs = self.grad_and_value(x_prev=x_prev, x_0_hat=x_0_hat, measurement=measurement, beta=beta, **kwargs)
+        # mv_eta = min(self.scale, (outs['r'] * 3 * 256 * 256))
+        # x_t -= mv_eta * outs['x_t_grad']
+        x_t -= self.scale * eta * outs['x_t_grad']
         norm = outs['norm']
         return x_t, norm, outs

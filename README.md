@@ -99,13 +99,13 @@ To run DPG for super-resolution:
 
 
 ```
-python3 sample_condition.py --model_config=configs/model_config.yaml --diffusion_config=configs/phase_retrieval_config.yaml --task_config=configs/super_resolution_config.yaml
+python3 sample_condition.py --model_config=configs/model_config.yaml --diffusion_config=configs/ddim_config.yaml --task_config=configs/super_resolution_config.yaml
 ```
 
 for inpainting
 
 ```
-python3 sample_condition.py --model_config=configs/model_config.yaml --diffusion_config=configs/diffusion_config.yaml --task_config=configs/inpainting_config.yaml
+python3 sample_condition.py --model_config=configs/model_config.yaml --diffusion_config=configs/ddim_config.yaml --task_config=configs/inpainting_config.yaml
 ```
 
 :speaker: For imagenet, use configs/imagenet_model_config.yaml

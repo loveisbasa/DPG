@@ -21,6 +21,8 @@ from util.logger import get_logger
 # tensorboard for debugging
 from torch.utils.tensorboard import SummaryWriter
 
+import time
+
 
 
 
@@ -38,11 +40,16 @@ def main():
     parser.add_argument('--task_config', type=str)
     parser.add_argument('--gpu', type=int, default=0)
     parser.add_argument('--save_dir', type=str, default='./results')
+    parser.add_argument('--record', type=bool, default=False)
+    parser.add_argument('--n', type=int, default=100)
     args = parser.parse_args()
 
     # logger
     logger = get_logger()
-    writer = SummaryWriter()
+    if args.record:
+        writer = SummaryWriter()
+    else:
+        writer = None
 
     # Device setting
     device_str = f"cuda:{args.gpu}" if torch.cuda.is_available() else 'cpu'
@@ -82,7 +89,7 @@ def main():
     # sample_fn = partial(sample_fn, model, (1, 3, model_config['image_size'], model_config['image_size']), clip_denoised=diffusion_config['clip_denoised'])
 
     # Working directory
-    out_path = os.path.join(args.save_dir, measure_config['operator']['name'])
+    out_path = os.path.join(args.save_dir, measure_config['operator']['name']+'_'+task_config['data']['name']+'_'+task_config['conditioning']['method'])
     os.makedirs(out_path, exist_ok=True)
     for img_dir in ['input', 'recon', 'progress', 'label']:
         os.makedirs(os.path.join(out_path, img_dir), exist_ok=True)
@@ -91,8 +98,17 @@ def main():
 
     # Prepare dataloader
     data_config = task_config['data']
-    transform = transforms.Compose([transforms.ToTensor(),
+    if task_config['data']['name'] == 'ffhq':
+        transform = transforms.Compose([transforms.ToTensor(),
                                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    elif task_config['data']['name'] == 'imagenet':
+        def rescale(image): return (image - 0.5) * 2.
+        transform = transforms.Compose([transforms.Resize(256),
+                                        transforms.CenterCrop((256, 256)),
+                                        transforms.ToTensor(),
+                                        transforms.Lambda(rescale)])
+    else:
+        raise ValueError(f"Unknown dataset {data_config['data']}")
     dataset = get_dataset(**data_config, transforms=transform)
     loader = get_dataloader(dataset, batch_size=1, num_workers=0, train=False)
 
@@ -102,6 +118,8 @@ def main():
            **measure_config['mask_opt']
         )
 
+    # timer
+    total_time = 0.
     # Do Inference
     for i, ref_img in enumerate(loader):
         logger.info(f"Inference for image {i}")
@@ -126,14 +144,25 @@ def main():
 
         # Sampling
         x_start = torch.randn(ref_img.shape, device=device).requires_grad_()
-        sample = sample_fn(x_start=x_start, measurement=y_n, record=True, save_root=out_path, num_run=i)
+        t_start = time.time()
+        sample = sample_fn(x_start=x_start, measurement=y_n, record=args.record, save_root=out_path, num_run=i)
+        total_time += (time.time() - t_start)
 
         plt.imsave(os.path.join(out_path, 'input', fname), clear_color(y_n))
         plt.imsave(os.path.join(out_path, 'label', fname), clear_color(ref_img))
         plt.imsave(os.path.join(out_path, 'recon', fname), clear_color(sample))
-        if measure_config['operator']['name'] == 'inpainting':
-            plt.imsave(os.path.join(out_path,'mask', fname), clear_color(y))
-        writer.close()
+        # if measure_config['operator']['name'] == 'inpainting':
+        #     plt.imsave(os.path.join(out_path,'mask', fname), clear_color(y))
+        if writer is not None: writer.close()
+
+        if args.n != -1 and i == (args.n - 1):
+            break
+    output = {'per_img_timer': total_time / (i + 1)}
+    analysis_pt = out_path + '/analysis.pt'
+    print(analysis_pt)
+    torch.save(output, analysis_pt)
+
+
 
 if __name__ == '__main__':
     main()

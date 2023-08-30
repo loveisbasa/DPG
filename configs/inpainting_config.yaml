@@ -1,25 +1,29 @@
 conditioning:
   # method: ps
-  # # method: ps
   # params:
   #   scale: 0.5
+  # method: pg
+  # params:
+  #   scale: 1.
+  #   mc: 10000
+  #   beta: 0.1
+  # DDIM
   method: pg
   params:
     scale: 3.
-    mc: 10000
+    mc: 11000
+    beta: 0.1
 
 data:
   name: ffhq
-  root: ./data/samples/
+  root: /home/tanghaoyue13/dataset/ffhqval
 
 measurement:
   operator:
     name: inpainting
   mask_opt:
-    # mask_type: random
     mask_type: box
     mask_len_range: !!python/tuple [128, 129]  # for box
-    # mask_prob_range: !!python/tuple [0.3, 0.7]  # for random
     image_size: 256
 
 

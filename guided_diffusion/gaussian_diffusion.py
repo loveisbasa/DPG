@@ -39,6 +39,7 @@ def create_sampler(sampler,
                    timestep_respacing=""):
 
     sampler = get_sampler(name=sampler)
+    sampler.name = sampler
 
     betas = get_named_beta_schedule(noise_schedule, steps)
     if not timestep_respacing:
@@ -191,13 +192,26 @@ class GaussianDiffusion:
 
             s = idx # current time
 
-            alpha_prod_cur, alpha_prod_prev, beta = self.alphas_cumprod[s], self.alphas_cumprod_prev[s], self.betas[s]
-            sigma = math.sqrt(1-alpha_prod_cur)
-            # sigma = math.sqrt((1 - alpha_prod_prev) / (1 - alpha_prod_cur) * beta) + 1e-3
-            alpha = 1 - beta
+            alpha_bar, alpha_bar_prev = self.alphas_cumprod[s], self.alphas_cumprod_prev[s]
+            sigma = (1 - alpha_bar_prev) / (1 - alpha_bar) * (1 - alpha_bar / alpha_bar_prev)
+            # if idx < self.num_timesteps - 10: eta = 1 / (sigma + 1)
+            # else: eta = 0
+            # eta = 1 / (sigma + 1)
+            # eta = math.sqrt(1 - alpha_bar)
+            # eta = 1.
+            # eta = math.sqrt(1 - alpha_bar_prev) * math.sqrt(alpha_bar_prev / (1 - alpha_bar_prev)) - math.sqrt(alpha_bar / (1 - alpha_bar))
+            if self.name == 'ddim':
+                # eta = math.sqrt(sigma / (sigma + 1)) if idx < int(self.num_timesteps * 0.9) else 0
+                eta = 1. * idx / self.num_timesteps
+            else:
+                # if idx < int(self.num_timesteps * 0.2):
+                #     eta = idx / (0.2 * self.num_timesteps)
+                eta = 1. if idx > 0 else 0
+            beta = 1. * idx / self.num_timesteps
 
             # Give condition.
             noisy_measurement = self.q_sample(measurement, t=time)
+
 
             # TODO: how can we handle argument for different condition method?
             img, distance, outs = measurement_cond_fn(x_t=out['sample'],
@@ -206,12 +220,18 @@ class GaussianDiffusion:
                                       x_prev=img,
                                       x_0_hat=out['pred_xstart'],
                                       r=1. * idx / self.num_timesteps,
-                                      eta=1.,
+                                      eta=eta,
+                                      beta=beta
                                       )
             img = img.detach_()
 
-            writer.add_scalar('Loss/'+str(num_run), distance, self.num_timesteps-idx-1)
-            # writer.add_scalar('grad/norm'+str(num_run), outs['grad_norm'], self.num_timesteps-idx-1)
+
+            if writer is not None:
+                writer.add_scalar('Loss/ps'+str(num_run), distance, self.num_timesteps-idx-1)
+                writer.add_scalar('grad/norml2'+str(num_run), outs['grad_norm'], self.num_timesteps-idx-1)
+                writer.add_scalar('loos-gradnorm-dps/l2'+str(num_run), outs['grad_norm'], distance)
+                writer.add_scalar('ddimsteps', eta, self.num_timesteps-idx-1)
+                writer.add_scalar('r', outs['r'], self.num_timesteps-idx-1)
             # # writer.add_scalar('p0l_mu_var/mean'+str(num_run), p_0l_mu, self.num_timesteps-idx-1)
             # writer.add_scalar('p0l_mu_var/mean'+str(num_run), outs['p_0l'].mean(), self.num_timesteps-idx-1)
             # # writer.add_scalar('err/mean'+str(num_run), err.mean(), self.num_timesteps-idx-1)

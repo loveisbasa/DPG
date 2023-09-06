@@ -117,6 +117,8 @@ class PGSampling(ConditioningMethod):
         self.prev_grad = None
         self.beta = kwargs.get('beta', 0.1)
         self.maxloss = -1
+        self.Zscale = kwargs.get('Z', 1.)
+        self.bias = kwargs.get('bias', 0.)
 
     def grad_and_value(self, x_prev, x_0_hat, measurement, beta, **kwargs):
         # Z = 3 * 256 * 256 / 5
@@ -125,12 +127,7 @@ class PGSampling(ConditioningMethod):
             x_ref = x_0_hat.detach()
             Z = measurement - self.operator.forward(x_ref, **kwargs)
             Z = torch.linalg.norm(Z) ** 2
-            r = torch.sqrt(Z / (3 * 256 * 256))
-
-        # method 1: original DPS
-        # difference = measurement - self.operator.forward(x_0_hat, **kwargs)
-        # norm = torch.linalg.norm(difference)
-        # x_t_grad = torch.autograd.grad(outputs=norm, inputs=x_prev)[0]
+            r = torch.clamp(torch.sqrt(Z / (3 * 256 * 256)), min=0.05)
 
         # method 3: policy gradient
         _, C, H, W = x_prev.shape
@@ -138,13 +135,17 @@ class PGSampling(ConditioningMethod):
         x0.detach_()
 
         with torch.no_grad():
-            difference = measurement - self.operator.forward(x0, **kwargs)
-            p_0l = torch.exp(- (torch.linalg.norm(difference, dim=(1, 2, 3))**2) / Z ) # for Gaussian Distribution
+            if self.mc <= 1000: difference = measurement - self.operator.forward(x0, **kwargs)
+            else: difference = torch.cat([(measurement - self.operator.forward(x_batch, **kwargs)) for x_batch in x0.chunk(10)])
+            # difference = torch.clamp(difference.abs()-0.03, min=0.)
+            # bias = 0.05 * 0.05 * 3 * 64 * 64
+            p_0l = torch.exp(- torch.abs((torch.linalg.norm(difference, dim=(1, 2, 3))**2) - self.bias) / Z ) # for Gaussian Distribution
             pB = (torch.sum(p_0l) - p_0l) / (self.mc - 1)
             pB.detach_()
         log_q0t = torch.linalg.norm((x0 - x_0_hat), dim=(1, 2, 3))**2
         loss = torch.mean((p_0l-pB) * log_q0t)
         x_t_grad = torch.autograd.grad(outputs=loss, inputs=x_prev)[0]
+        del x0, difference, p_0l, pB, log_q0t, loss
 
         if self.prev_grad == None:
             self.prev_grad = x_t_grad
@@ -162,34 +163,8 @@ class PGSampling(ConditioningMethod):
             difference = measurement - self.operator.forward(x_0_hat, **kwargs)
             # norm = torch.linalg.norm(difference)
             norm = torch.linalg.norm(difference, dim=(1, 2, 3)).mean()
-            err = (measurement - self.operator.forward(x0, **kwargs)).detach_()
-            err = torch.linalg.norm(err, dim=(1, 2, 3)) ** 2
-
-
-
-        # ref_grad = torch.autograd.grad(outputs=norm, inputs=x_prev)[0]
-
-
-
-        # if self.noiser.__name__ == 'gaussian':
-        #     import pdb
-        #     pdb.set_trace()
-        #     difference = measurement - self.operator.forward(x_0_hat, **kwargs)
-        #     norm = torch.linalg.norm(difference)
-        #     norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev)[0]
-
-        # elif self.noiser.__name__ == 'poisson':
-        #     Ax = self.operator.forward(x_0_hat, **kwargs)
-        #     difference = measurement-Ax
-        #     norm = torch.linalg.norm(difference) / measurement.abs()
-        #     norm = norm.mean()
-        #     norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev)[0]
-
-        # else:
-        #     raise NotImplementedError
 
         return {'x_t_grad': grad, 'norm': norm,
-                'p_0l': p_0l,
                 'Z': Z,
                 'grad_norm': x_t_grad.norm().item(),
                 'r': r}

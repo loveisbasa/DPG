@@ -148,6 +148,17 @@ def main():
         sample = sample_fn(x_start=x_start, measurement=y_n, record=args.record, save_root=out_path, num_run=i)
         total_time += (time.time() - t_start)
 
+        # lpips
+        from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
+        from torchmetrics.image import PeakSignalNoiseRatio
+        psnr = PeakSignalNoiseRatio(data_range=2.).to(device)
+        psnr = psnr(ref_img, sample).cpu().detach().item()
+        lpips = LearnedPerceptualImagePatchSimilarity(net_type='vgg', reduction='sum').to(device)
+        lpips_score = lpips(torch.clamp(ref_img, min=-1, max=1), torch.clamp(sample, min=-1, max=1)).cpu().detach().item()
+        print('LPIPS: ', lpips_score,
+            'Reconstruction MSE: ', psnr,
+            'Observation MSE: ', (torch.norm(y_n-operator.forward(sample))**2).cpu().detach().item())
+
         plt.imsave(os.path.join(out_path, 'input', fname), clear_color(y_n))
         plt.imsave(os.path.join(out_path, 'label', fname), clear_color(ref_img))
         plt.imsave(os.path.join(out_path, 'recon', fname), clear_color(sample))

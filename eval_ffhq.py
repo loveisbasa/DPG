@@ -126,15 +126,14 @@ def evaluate(args):
     if args.metrics['fid']:
 
         from torchmetrics.image.fid import FrechetInceptionDistance
-        # real_img, fake_img = torch.stack([torch.from_numpy(numpy.array(i_real)) for i_real in img_real]), torch.stack([torch.from_numpy(numpy.array(i_recon)) for  i_recon in img_recon])
-        real_img = torch.stack([resize(299)(i_real) for i_real in img_validation_set])
-        fake_img = torch.stack([resize(299)(i_recon) for  i_recon in img_recon])
+        # real_img = torch.stack([resize(299)(i_real) for i_real in img_validation_set])
+        # fake_img = torch.stack([resize(299)(i_recon) for  i_recon in img_recon])
 
-        # real_img, fake_img = torch.stack([resize(299)(i_real) for i_real in img_real]), torch.stack([resize(299)(i_recon) for  i_recon in img_recon])
+        real_img, fake_img = torch.stack([resize(299)(i_real) for i_real in img_real]), torch.stack([resize(299)(i_recon) for  i_recon in img_recon])
 
         fid = FrechetInceptionDistance(feature=2048, normalize=True)
-        for real_batch in real_img.chunk(32): fid.update(real_batch, real=True)
-        for fake_batch in fake_img.chunk(32): fid.update(fake_batch, real=False)
+        for real_batch in real_img.chunk(10): fid.update(real_batch, real=True)
+        for fake_batch in fake_img.chunk(10): fid.update(fake_batch, real=False)
         output['fid'] = fid.compute()
         # from evalutils.inception import InceptionV3
         # inception_net = InceptionV3([3]).to(args.device).eval()

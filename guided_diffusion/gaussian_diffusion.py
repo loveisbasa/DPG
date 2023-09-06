@@ -39,7 +39,6 @@ def create_sampler(sampler,
                    timestep_respacing=""):
 
     sampler = get_sampler(name=sampler)
-    sampler.name = sampler
 
     betas = get_named_beta_schedule(noise_schedule, steps)
     if not timestep_respacing:
@@ -194,24 +193,16 @@ class GaussianDiffusion:
 
             alpha_bar, alpha_bar_prev = self.alphas_cumprod[s], self.alphas_cumprod_prev[s]
             sigma = (1 - alpha_bar_prev) / (1 - alpha_bar) * (1 - alpha_bar / alpha_bar_prev)
-            # if idx < self.num_timesteps - 10: eta = 1 / (sigma + 1)
-            # else: eta = 0
-            # eta = 1 / (sigma + 1)
-            # eta = math.sqrt(1 - alpha_bar)
-            # eta = 1.
-            # eta = math.sqrt(1 - alpha_bar_prev) * math.sqrt(alpha_bar_prev / (1 - alpha_bar_prev)) - math.sqrt(alpha_bar / (1 - alpha_bar))
             if self.name == 'ddim':
-                # eta = math.sqrt(sigma / (sigma + 1)) if idx < int(self.num_timesteps * 0.9) else 0
-                eta = 1. * idx / self.num_timesteps
+                alpha_bar, alpha_bar_prev = self.alphas_cumprod[s], self.alphas_cumprod_prev[s]
+                eta = np.sqrt(alpha_bar_prev * (1 - alpha_bar) / alpha_bar) - np.sqrt(1 - alpha_bar_prev - sigma)
             else:
-                # if idx < int(self.num_timesteps * 0.2):
-                #     eta = idx / (0.2 * self.num_timesteps)
-                eta = 1. if idx > 0 else 0
+                beta = self.betas[s]
+                eta = beta / np.sqrt(1 - beta) / np.sqrt(1 - alpha_bar)
             beta = 1. * idx / self.num_timesteps
 
             # Give condition.
             noisy_measurement = self.q_sample(measurement, t=time)
-
 
             # TODO: how can we handle argument for different condition method?
             img, distance, outs = measurement_cond_fn(x_t=out['sample'],
@@ -231,7 +222,7 @@ class GaussianDiffusion:
                 writer.add_scalar('grad/norml2'+str(num_run), outs['grad_norm'], self.num_timesteps-idx-1)
                 writer.add_scalar('loos-gradnorm-dps/l2'+str(num_run), outs['grad_norm'], distance)
                 writer.add_scalar('ddimsteps', eta, self.num_timesteps-idx-1)
-                writer.add_scalar('r', outs['r'], self.num_timesteps-idx-1)
+                # writer.add_scalar('r', outs['r'], self.num_timesteps-idx-1)
             # # writer.add_scalar('p0l_mu_var/mean'+str(num_run), p_0l_mu, self.num_timesteps-idx-1)
             # writer.add_scalar('p0l_mu_var/mean'+str(num_run), outs['p_0l'].mean(), self.num_timesteps-idx-1)
             # # writer.add_scalar('err/mean'+str(num_run), err.mean(), self.num_timesteps-idx-1)
@@ -251,7 +242,7 @@ class GaussianDiffusion:
             #     img = img.detach_()
             #     print(distance)
 
-            pbar.set_postfix({'distance': distance.item(), 'grad_norm': outs['grad_norm']}, refresh=False)
+            pbar.set_postfix({'distance': distance.item(), 'grad_norm': outs['grad_norm'], 'eta': eta}, refresh=False)
             if record:
                 if idx % 10 == 0:
                     file_path = os.path.join(save_root, f"progress/x_{str(idx).zfill(4)}.png")
@@ -415,6 +406,10 @@ class _WrappedModel:
 
 @register_sampler(name='ddpm')
 class DDPM(SpacedDiffusion):
+    def __init__(self, **kwargs):
+        self.name = "ddpm"
+        super().__init__(**kwargs)
+
     def p_sample(self, model, x, t):
         out = self.p_mean_variance(model, x, t)
         sample = out['mean']
@@ -428,6 +423,10 @@ class DDPM(SpacedDiffusion):
 
 @register_sampler(name='ddim')
 class DDIM(SpacedDiffusion):
+    def __init__(self, **kwargs):
+        self.name = "ddim"
+        super().__init__(**kwargs)
+
     def p_sample(self, model, x, t, eta=0.0):
         out = self.p_mean_variance(model, x, t)
 

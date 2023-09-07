@@ -3,7 +3,7 @@ from PIL import Image
 from typing import Callable, Optional
 from torch.utils.data import DataLoader
 from torchvision.datasets import VisionDataset
-
+import random
 
 __DATASET__ = {}
 
@@ -23,13 +23,13 @@ def get_dataset(name: str, root: str, **kwargs):
 
 
 def get_dataloader(dataset: VisionDataset,
-                   batch_size: int, 
-                   num_workers: int, 
+                   batch_size: int,
+                   num_workers: int,
                    train: bool):
-    dataloader = DataLoader(dataset, 
-                            batch_size, 
-                            shuffle=train, 
-                            num_workers=num_workers, 
+    dataloader = DataLoader(dataset,
+                            batch_size,
+                            shuffle=train,
+                            num_workers=num_workers,
                             drop_last=train)
     return dataloader
 
@@ -48,8 +48,54 @@ class FFHQDataset(VisionDataset):
     def __getitem__(self, index: int):
         fpath = self.fpaths[index]
         img = Image.open(fpath).convert('RGB')
-        
+
         if self.transforms is not None:
             img = self.transforms(img)
-        
+
+        return img
+
+@register_dataset(name='imagenet')
+# sorted dataset
+# class ImageNetDataset(VisionDataset):
+#     def __init__(self, root: str, transforms: Optional[Callable]=None):
+#         super().__init__(root, transforms)
+
+#         self.fpaths = sorted(glob(root + '/**/*.png', recursive=True))
+#         assert len(self.fpaths) > 0, "File list is empty. Check the root."
+
+#     def __len__(self):
+#         return len(self.fpaths)
+
+#     def __getitem__(self, index: int):
+#         fpath = self.fpaths[index]
+#         img = Image.open(fpath).convert('RGB')
+
+#         if self.transforms is not None:
+#             img = self.transforms(img)
+
+#         return img
+# unsorted dataset
+class ImageNetDataset(VisionDataset):
+    def __init__(self, root: str, transforms: Optional[Callable]=None):
+        super().__init__(root, transforms)
+
+        self.fpaths = sorted(glob(root + '/**/*.JPEG', recursive=True))
+        assert len(self.fpaths) > 0, "File list is empty. Check the root."
+        label_file = open(root + "/val.txt", 'r')
+        contents = label_file.read()
+        self.labels = contents.split('\n')[0:50000]
+        self.labels = [int(tmp.split(' ')[-1]) for tmp in self.labels]
+
+    def __len__(self):
+        return len(self.fpaths)
+
+    def __getitem__(self, index: int):
+        f_set = [self.fpaths[idx] for idx in range(50000) if self.labels[idx]==index]
+        fpath = random.choices(f_set, k=1)[0]
+        # fpath = self.fpaths[index]
+        img = Image.open(fpath).convert('RGB')
+
+        if self.transforms is not None:
+            img = self.transforms(img)
+
         return img

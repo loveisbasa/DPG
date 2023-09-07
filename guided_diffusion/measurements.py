@@ -69,6 +69,22 @@ class DenoiseOperator(LinearOperator):
     def project(self, data):
         return data
 
+@register_operator(name='jpeg_restoration')
+class JpegRestorationOperator(LinearOperator):
+    def __init__(self, in_shape, scale_factor, device):
+        self.device = device
+        self.up_sample = partial(F.interpolate, scale_factor=scale_factor)
+        self.down_sample = Resizer(in_shape, 1/scale_factor).to(device)
+
+    def forward(self, data, **kwargs):
+        return self.down_sample(data)
+
+    def transpose(self, data, **kwargs):
+        return self.up_sample(data)
+
+    def project(self, data, measurement, **kwargs):
+        return data - self.transpose(self.forward(data)) + self.transpose(measurement)
+
 
 @register_operator(name='super_resolution')
 class SuperResolutionOperator(LinearOperator):

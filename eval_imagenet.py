@@ -66,7 +66,7 @@ def get_args():
     args.ori_folder = Path(args.folder+'/label')
     args.edit_folder = Path(args.folder+'/recon')
 
-    args.metrics = {'deit': False,
+    args.metrics = {'deit': True,
                     'lpips': True,
                     'psnr': True,
                     'fid': True,
@@ -88,10 +88,11 @@ def evaluate(args):
     img_real, img_recon = [load(x) for x in label_paths], [load(x) for x in recon_paths]
 
     # # get labels for accuracy calculation
-    label_file = open("/home/tanghaoyue13/dataset/dataset/val.txt", 'r')
-    contents = label_file.read()
-    labels = contents.split('\n')[0:50000]
-    labels = [int(tmp.split(' ')[-1]) for tmp in labels]
+    # label_file = open("/home/tanghaoyue13/dataset/dataset/val.txt", 'r')
+    # contents = label_file.read()
+    # labels = contents.split('\n')[0:50000]
+    # labels = [int(tmp.split(' ')[-1]) for tmp in labels]
+    labels = [idx for idx in range(1000)]
     labels = torch.tensor(labels[0:args.num_pic])
     real_tensor, recon_tensor = torch.stack([T.ToTensor()(x) for x in img_real]), torch.stack([T.ToTensor()(x) for x in img_recon])
 
@@ -119,17 +120,14 @@ def evaluate(args):
 
     # compute LPIPS w.r.t. input images
     if args.metrics['lpips']:
-        # from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
-        # lpips = LearnedPerceptualImagePatchSimilarity(net_type='vgg', normalize=True)
-        # output['Mean LPIPS distance'] = lpips(real_tensor, recon_tensor).item()
-        lpnet = lpips.LPIPS(net='alex').to(args.device)
-        lpips_dist = lambda x, y: lpnet.forward(x.to(args.device),
-                                                y.to(args.device),
-                                                normalize=True).detach().cpu()
-        sim_scores = torch.cat([lpips_dist(real, recon) for real, recon
-                                in zip(real_tensor.split(32), recon_tensor.split(32))])
-        output['Mean LPIPS distance'] = sim_scores.mean().item()
-        output['Mean LPIPS variance'] = sim_scores.var().item()
+        from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
+        lpips = LearnedPerceptualImagePatchSimilarity(net_type='vgg', normalize=True, reduction='sum')
+        lpips_score = 0
+        num_imgs = 0
+        for real_batch, fake_batch in zip(real_tensor.chunk(32), recon_tensor.chunk(32)):
+            lpips_score += lpips(real_batch, fake_batch).cpu().detach().item()
+            num_imgs += real_batch.shape[0]
+        output['Mean LPIPS distance'] = lpips_score / num_imgs
 
     if args.metrics['psnr'] or args.metrics['ssim']:
         # real, fake = torch.stack([torch.from_numpy(numpy.array(i_real)) for i_real in img_real]), torch.stack([torch.from_numpy(numpy.array(i_recon)) for  i_recon in img_recon])
@@ -151,9 +149,14 @@ def evaluate(args):
 
     # compute inception scores
     if args.metrics['fid']:
-        # load real image stats
-        with np.load('evalutils/fid_stats_imagenet_train.npz') as f:
-            m, s = f['mu'][:], f['sigma'][:]
+        from torchmetrics.image.fid import FrechetInceptionDistance
+
+        real_img, fake_img = torch.stack([resize(299)(i_real) for i_real in img_real]), torch.stack([resize(299)(i_recon) for  i_recon in img_recon])
+
+        fid = FrechetInceptionDistance(feature=2048, normalize=True)
+        for real_batch in real_img.chunk(10): fid.update(real_batch, real=True)
+        for fake_batch in fake_img.chunk(10): fid.update(fake_batch, real=False)
+        output['fid'] = fid.compute()
 
 
     torch.save(output, out_path)

@@ -194,8 +194,9 @@ class GaussianDiffusion:
             alpha_bar, alpha_bar_prev = self.alphas_cumprod[s], self.alphas_cumprod_prev[s]
             sigma = (1 - alpha_bar_prev) / (1 - alpha_bar) * (1 - alpha_bar / alpha_bar_prev)
             if self.name == 'ddim':
-                alpha_bar, alpha_bar_prev = self.alphas_cumprod[s], self.alphas_cumprod_prev[s]
-                eta = np.sqrt(alpha_bar_prev * (1 - alpha_bar) / alpha_bar) - np.sqrt(1 - alpha_bar_prev - sigma)
+                eta = 1.
+                # alpha_bar, alpha_bar_prev = self.alphas_cumprod[s], self.alphas_cumprod_prev[s]
+                # eta = np.sqrt(alpha_bar_prev * (1 - alpha_bar) / alpha_bar) - np.sqrt(1 - alpha_bar_prev - sigma)
             else:
                 beta = self.betas[s]
                 eta = beta / np.sqrt(1 - beta) / np.sqrt(1 - alpha_bar)

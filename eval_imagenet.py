@@ -101,6 +101,7 @@ def evaluate(args):
 
     if args.metrics['deit']:
         imgt_classif = torch.stack([preprocess(im) for im in img_recon])
+        # imgt_classif = torch.stack([preprocess(im) for im in img_real])
         model = resnet50(pretrained=True)
 
         # in_norm = T.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))

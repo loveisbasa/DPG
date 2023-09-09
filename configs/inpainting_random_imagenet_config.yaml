@@ -13,9 +13,10 @@ conditioning:
   # DDIM
   method: pg
   params:
-    scale: 5.
-    mc: 5000
+    scale: 4.
+    mc: 9000
     beta: 0.
+    # Znorm: 19660.
 
 data:
   name: imagenet
@@ -26,7 +27,7 @@ measurement:
     name: inpainting
   mask_opt:
     mask_type: random
-    mask_prob_range: !!python/tuple [0.3, 0.7]  # for random
+    mask_prob_range: !!python/tuple [0.919, 0.920]  # for random
     image_size: 256
 
 

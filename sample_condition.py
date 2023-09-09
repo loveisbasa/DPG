@@ -120,6 +120,10 @@ def main():
 
     # timer
     total_time = 0.
+    psnr = PeakSignalNoiseRatio(data_range=2.).to(device)
+    lpips = LearnedPerceptualImagePatchSimilarity(net_type='vgg', reduction='sum').to(device)
+
+
     # Do Inference
     for i, ref_img in enumerate(loader):
         logger.info(f"Inference for image {i}")
@@ -151,13 +155,11 @@ def main():
         # lpips
         from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
         from torchmetrics.image import PeakSignalNoiseRatio
-        psnr = PeakSignalNoiseRatio(data_range=2.).to(device)
-        psnr = psnr(ref_img, sample).cpu().detach().item()
-        lpips = LearnedPerceptualImagePatchSimilarity(net_type='vgg', reduction='sum').to(device)
-        lpips_score = lpips(torch.clamp(ref_img, min=-1, max=1), torch.clamp(sample, min=-1, max=1)).cpu().detach().item()
+        with torch.no_grad():
+            psnr = psnr(ref_img, sample).cpu().detach().item()
+            lpips_score = lpips(torch.clamp(ref_img, min=-1, max=1), torch.clamp(sample, min=-1, max=1)).cpu().detach().item()
         print('LPIPS: ', lpips_score,
-            'Reconstruction MSE: ', psnr,
-            'Observation MSE: ', (torch.norm(y_n-operator.forward(sample))**2).cpu().detach().item())
+            'Reconstruction MSE: ', psnr)
 
         plt.imsave(os.path.join(out_path, 'input', fname), clear_color(y_n))
         plt.imsave(os.path.join(out_path, 'label', fname), clear_color(ref_img))

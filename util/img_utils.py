@@ -182,9 +182,17 @@ def center_sq_bbox(img, mask_shape, image_size=256, margin=(16, 16)):
     maxt = image_size - margin_height - h
     maxl = image_size - margin_width - w
 
-    # bb
-    t = (margin_height + maxt) // 2
-    l = (margin_width + maxl) // 2
+    # # bb
+    # t = (margin_height + maxt) // 2
+    # l = (margin_width + maxl) // 2
+
+    # # make mask
+    # mask = torch.ones([B, C, H, W], device=img.device)
+    # mask[..., t:t+h, l:l+w] = 0
+
+    # for uncropping box
+    t, l = 0, 0
+    h, w = 64, 256
 
     # make mask
     mask = torch.ones([B, C, H, W], device=img.device)
@@ -214,7 +222,7 @@ class mask_generator:
         l, h = int(l), int(h)
         mask_h = np.random.randint(l, h)
         mask_w = np.random.randint(l, h)
-        mask, t, tl, w, wh = center_sq_bbox(img,
+        mask, t, tl, w, wh = random_sq_bbox(img,
                               mask_shape=(mask_h, mask_w),
                               image_size=self.image_size,
                               margin=self.margin)

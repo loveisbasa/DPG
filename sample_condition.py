@@ -22,7 +22,8 @@ from util.logger import get_logger
 from torch.utils.tensorboard import SummaryWriter
 
 import time
-
+from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
+from torchmetrics.image import PeakSignalNoiseRatio
 
 
 
@@ -120,8 +121,8 @@ def main():
 
     # timer
     total_time = 0.
-    psnr = PeakSignalNoiseRatio(data_range=2.).to(device)
-    lpips = LearnedPerceptualImagePatchSimilarity(net_type='vgg', reduction='sum').to(device)
+    psnr_func = PeakSignalNoiseRatio(data_range=2.).to(device)
+    lpips_func = LearnedPerceptualImagePatchSimilarity(net_type='vgg', reduction='sum').to(device)
 
 
     # Do Inference
@@ -153,11 +154,9 @@ def main():
         total_time += (time.time() - t_start)
 
         # lpips
-        from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
-        from torchmetrics.image import PeakSignalNoiseRatio
         with torch.no_grad():
-            psnr = psnr(ref_img, sample).cpu().detach().item()
-            lpips_score = lpips(torch.clamp(ref_img, min=-1, max=1), torch.clamp(sample, min=-1, max=1)).cpu().detach().item()
+            psnr = psnr_func(ref_img, sample).cpu().detach().item()
+            lpips_score = lpips_func(torch.clamp(ref_img, min=-1, max=1), torch.clamp(sample, min=-1, max=1)).cpu().detach().item()
         print('LPIPS: ', lpips_score,
             'Reconstruction MSE: ', psnr)
 

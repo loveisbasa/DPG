@@ -1,0 +1,28 @@
+conditioning:
+  # method: ps
+  # params:
+  #   scale: 0.3
+  # method: pg
+  # params:
+  #   scale: 1.
+  method: pg
+  params:
+    scale: 200.
+    mc: 500
+    beta: 0.1
+
+data:
+  name: imagenet
+  # root: ./data/samples/
+  root: /home/tanghaoyue13/dataset/dataset
+
+
+measurement:
+  operator:
+    name: gaussian_blur
+    kernel_size: 61
+    intensity: 3.0
+
+  noise:
+    name: gaussian
+    sigma: 0.05

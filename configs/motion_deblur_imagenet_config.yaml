@@ -1,0 +1,42 @@
+conditioning:
+  # method: ps
+  # params:
+  #   scale: 0.3
+
+  # for DDIM
+  # method: pg
+  # params:
+  #   scale: 10.
+  #   mc: 500
+  #   beta: 0.
+  #   bias: 0.
+
+  # for DDPM, very good!
+  method: pg
+  params:
+    scale: 200.
+    mc: 500
+    beta: 0.
+    bias: 0.
+    rmin: 0.05
+
+    # scale 200, Lpips 255
+    # scale 100, Lpips 266
+
+
+
+data:
+  name: imagenet
+  # root: ./data/samples/
+  root: /home/tanghaoyue13/dataset/dataset
+
+
+measurement:
+  operator:
+    name: motion_blur
+    kernel_size: 61
+    intensity: 0.5
+
+  noise:
+    name: gaussian
+    sigma: 0.05

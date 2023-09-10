@@ -1,0 +1,37 @@
+conditioning:
+  # method: ps
+  # params:
+  #   scale: 0.5
+
+  # # DDPM
+  # method: pg
+  # params:
+  #   scale: 1.
+  #   mc: 1000
+  #   beta: 0.1
+
+  # DDIM
+  method: pg
+  params:
+    scale: 10.
+    mc: 5000
+    beta: 0.1
+
+data:
+  name: ffhq
+  root: /home/tanghaoyue13/dataset/ffhqval
+
+measurement:
+  operator:
+    name: inpainting
+  mask_opt:
+    mask_type: random
+    mask_prob_range: !!python/tuple [0.91, 0.92]  # for random
+    # mask_prob_range: !!python/tuple [0.3, 0.7]  # for random
+
+    image_size: 256
+
+
+  noise:
+    name: gaussian
+    sigma: 0.05

@@ -93,6 +93,9 @@ def evaluate(args):
 
     output = torch.load(out_path) if os.path.exists(out_path) else {}
 
+    device = torch.device("cpu")
+
+
     # compute LPIPS w.r.t. input images
     if args.metrics['lpips']:
         from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
@@ -103,7 +106,6 @@ def evaluate(args):
             lpips_score += lpips(real_batch, fake_batch).cpu().detach().item()
             num_imgs += real_batch.shape[0]
         output['Mean LPIPS distance'] = lpips_score / num_imgs
-        # output['Mean LPIPS distance'] = lpips(real_tensor, recon_tensor).item()
 
     if args.metrics['psnr'] or args.metrics['ssim']:
         # real, fake = torch.stack([torch.from_numpy(numpy.array(i_real)) for i_real in img_real]), torch.stack([torch.from_numpy(numpy.array(i_recon)) for  i_recon in img_recon])

@@ -69,6 +69,23 @@ class DenoiseOperator(LinearOperator):
     def project(self, data):
         return data
 
+@register_operator(name='color')
+class ColorOperator(LinearOperator):
+    def __init__(self, in_shape, scale_factor, device):
+        self.device = device
+        # self.up_sample = partial(torch.expand, sizes=(-1, 3, -1, -1))
+        self.down_sample = partial(torch.mean, dim=1, keepdim=True)
+
+    def forward(self, data, **kwargs):
+        return self.down_sample(data)
+
+    def transpose(self, data, **kwargs):
+        # return self.up_sample(data)
+        return data.expand(-1, 3, 1, 1)
+
+    def project(self, data, measurement, **kwargs):
+        return data - self.transpose(self.forward(data)) + self.transpose(measurement)
+
 @register_operator(name='jpeg_restoration')
 class JpegRestorationOperator(LinearOperator):
     def __init__(self, in_shape, scale_factor, device):

@@ -1,27 +1,9 @@
 conditioning:
   # method: ps
   # params:
-  #   scale: 0.3
+  #   scale: 1.
 
-  # for DDIM sampler
-  # method: pg
-  # params:
-  #   scale: 40
-  #   mc: 5000
-  #   beta: 0.
-  #   rmin: 0.05
-    # bias: 30.72
-
-  # # for DDPM sampler~ LPIPS=0.23
-  # method: pg
-  # params:
-  #   scale: 105.
-  #   mc: 1000
-  #   beta: 0.
-  #   bias: 30.72
-    # # for DDPM sampler~ LPIPS=0.23
-
-  # DDPM, LPIPS~0.216
+  # # DDPM, LPIPS~0.216
   # method: pg
   # params:
   #   scale: 102.
@@ -29,9 +11,9 @@ conditioning:
   #   beta: 0.
   #   bias: 30.72
   #   rmin: 0.05
-    # notice, bias go with noise
+  #   # notice, bias go with noise
 
-  # DDPM, LPIPS~0.217
+  # # DDPM, LPIPS~0.217
   method: pg
   params:
     scale: 120.
@@ -43,7 +25,8 @@ conditioning:
 data:
   name: ffhq
   # root: /home/tanghaoyue13/dataset/ffhqval
-  root: ./data/samples/
+  root: /home/tanghaoyue13/dataset/ffhqvaldps
+  # root: ./data/ffhq
 
 measurement:
   operator:

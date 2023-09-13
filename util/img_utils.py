@@ -182,21 +182,33 @@ def center_sq_bbox(img, mask_shape, image_size=256, margin=(16, 16)):
     maxt = image_size - margin_height - h
     maxl = image_size - margin_width - w
 
-    # # bb
-    # t = (margin_height + maxt) // 2
-    # l = (margin_width + maxl) // 2
-
-    # # make mask
-    # mask = torch.ones([B, C, H, W], device=img.device)
-    # mask[..., t:t+h, l:l+w] = 0
-
-    # for uncropping box
-    t, l = 0, 0
-    h, w = 64, 256
+    # bb
+    t = (H - h) // 2
+    l = (W - w) // 2
 
     # make mask
     mask = torch.ones([B, C, H, W], device=img.device)
     mask[..., t:t+h, l:l+w] = 0
+
+    return mask, t, t+h, l, l+w
+
+
+def uncrop_bbox(img, mask_shape, image_size=256, margin=(16, 16), direction='l'):
+    """Generate a random sqaure mask for inpainting
+    """
+    B, C, H, W = img.shape
+    h, w = H, W//2
+    t, l = 0, W//2
+
+    # h, w = H // 2, W
+    # t, l = H // 2, 0
+
+    # make mask
+    mask = torch.ones([B, C, H, W], device=img.device)
+    if direction='l':
+        mask[..., t:t+h, w:(w+l)] = 0
+    elif direction='r':
+        mask[..., t:t+h, 0:w] = 0
 
     return mask, t, t+h, l, l+w
 
@@ -210,7 +222,7 @@ class mask_generator:
         (mask_prob_range): for the case of random masking,
         specify the probability of individual pixels being masked
         """
-        assert mask_type in ['box', 'random', 'both', 'extreme']
+        assert mask_type in ['box-center', 'box-random', 'random', 'both', 'extreme', 'uncrop']
         self.mask_type = mask_type
         self.mask_len_range = mask_len_range
         self.mask_prob_range = mask_prob_range
@@ -223,6 +235,28 @@ class mask_generator:
         mask_h = np.random.randint(l, h)
         mask_w = np.random.randint(l, h)
         mask, t, tl, w, wh = random_sq_bbox(img,
+                              mask_shape=(mask_h, mask_w),
+                              image_size=self.image_size,
+                              margin=self.margin)
+        return mask, t, tl, w, wh
+
+    def _retrieve_box_center(self, img):
+        l, h = self.mask_len_range
+        l, h = int(l), int(h)
+        mask_h = 128
+        mask_w = np.random.randint(l, h)
+        mask, t, tl, w, wh = center_sq_bbox(img,
+                              mask_shape=(mask_h, mask_w),
+                              image_size=self.image_size,
+                              margin=self.margin)
+        return mask, t, tl, w, wh
+
+    def _retrieve_uncrop(self, img):
+        l, h = self.mask_len_range
+        l, h = int(l), int(h)
+        mask_h = 128
+        mask_w = np.random.randint(l, h)
+        mask, t, tl, w, wh = uncrop_bbox(img,
                               mask_shape=(mask_h, mask_w),
                               image_size=self.image_size,
                               margin=self.margin)
@@ -246,11 +280,18 @@ class mask_generator:
         if self.mask_type == 'random':
             mask = self._retrieve_random(img)
             return mask
-        elif self.mask_type == 'box':
+        elif self.mask_type == 'box-random':
             mask, t, th, w, wl = self._retrieve_box(img)
+            return mask
+        elif self.mask_type == 'box-center':
+            mask, t, th, w, wh = self._retrieve_box_center(img)
             return mask
         elif self.mask_type == 'extreme':
             mask, t, th, w, wl = self._retrieve_box(img)
+            mask = 1. - mask
+            return mask
+        elif self.mask_type == 'uncrop':
+            mask, t, th, w, wl = self._retrieve_uncrop(img)
             mask = 1. - mask
             return mask
 

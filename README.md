@@ -1,3 +1,13 @@
+pip install diffusers
+
+source run_inpaint_ddpm.sh
+source run_inpaint_sd.sh
+source run_super_ddpm.sh
+source run_super_sd.sh
+
+
+
+
 # Diffusion Posterior Sampling for General Noisy Inverse Problems (ICLR 2023 spotlight)
 
 ![result-gif1](./figures/motion_blur.gif)

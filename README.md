@@ -1,8 +1,11 @@
 pip install diffusers
 
 source run_inpaint_ddpm.sh
+
 source run_inpaint_sd.sh
+
 source run_super_ddpm.sh
+
 source run_super_sd.sh
 
 

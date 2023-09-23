@@ -108,6 +108,59 @@ class PosteriorSamplingPlus(ConditioningMethod):
         outs = {'norm': norm, 'grad_norm': 0.}
         return x_t, norm, outs
 
+@register_conditioning_method(name='lgd-mc')
+class LGDMCSampling(ConditioningMethod):
+    def __init__(self, operator, noiser, **kwargs):
+        super().__init__(operator, noiser)
+        self.mc = kwargs.get('mc', 20)
+        self.scale = kwargs.get('scale', 1.0)
+
+    def grad_and_value(self, x_prev, x_0_hat, measurement, r, **kwargs):
+        _, C, H, W = x_prev.shape
+        x0 = r * torch.randn((self.mc, C, H, W), device=x_0_hat.device) + x_0_hat
+        x0.detach_()
+
+        with torch.no_grad():
+            x_ref = x_0_hat.detach()
+            if self.noiser.__name__ == 'gaussian':
+                Z = measurement - self.operator.forward(x_ref, **kwargs)
+                Z = torch.linalg.norm(Z) ** 2
+            else:
+                Z = measurement - self.operator.forward(x_ref, **kwargs)
+                Z = torch.sum(Z.abs())
+
+        with torch.no_grad():
+            if self.mc <= 1000: difference = measurement - self.operator.forward(x0, **kwargs)
+            else: difference = torch.cat([(measurement - self.operator.forward(x_batch, **kwargs)) for x_batch in x0.chunk(10)])
+            if self.noiser.__name__ == 'gaussian':
+                p_0l = torch.exp(- (torch.linalg.norm(difference, dim=(1, 2, 3))**2) / Z) # for Gaussian Distribution
+            else:
+                p_0l = torch.exp(- torch.sum(difference.abs(), dim=(1, 2, 3)) / Z)
+        q0t = torch.exp(-torch.linalg.norm((x0 - x_0_hat), dim=(1, 2, 3))**2)
+        loss = torch.log(torch.mean(p_0l * q0t))
+        x_t_grad = torch.autograd.grad(outputs=loss, inputs=x_prev)[0]
+        del x0, difference, p_0l, loss
+
+        # grad = x_t_grad / (x_t_grad.norm()+1e-7)
+        grad = x_t_grad
+
+        with torch.no_grad():
+            difference = measurement - self.operator.forward(x_0_hat, **kwargs)
+            # norm = torch.linalg.norm(difference)
+            norm = torch.linalg.norm(difference, dim=(1, 2, 3)).mean()
+
+        return {'x_t_grad': grad, 'norm': norm,
+                'Z': Z,
+                'grad_norm': x_t_grad.norm().item(),
+                'r': r}
+
+    def conditioning(self, x_prev, x_t, x_0_hat, measurement, r, eta, **kwargs):
+        outs = self.grad_and_value(x_prev=x_prev, x_0_hat=x_0_hat, measurement=measurement, r=r, **kwargs)
+        x_t += self.scale * eta * outs['x_t_grad']
+        norm = outs['norm']
+        return x_t, norm, outs
+
+
 @register_conditioning_method(name='pg')
 class PGSampling(ConditioningMethod):
     def __init__(self, operator, noiser, **kwargs):
@@ -119,43 +172,60 @@ class PGSampling(ConditioningMethod):
         self.maxloss = -1
         self.Zscale = kwargs.get('Z', 1.)
         self.bias = kwargs.get('bias', 0.)
+        self.rmin = kwargs.get('rmin', 0.)
+        self.Znorm = kwargs.get('Znorm', 196608.)
+        self.clamp_r = kwargs.get('clamp_r', 10.)
 
     def grad_and_value(self, x_prev, x_0_hat, measurement, beta, **kwargs):
         # Z = 3 * 256 * 256 / 5
 
         with torch.no_grad():
             x_ref = x_0_hat.detach()
-            Z = measurement - self.operator.forward(x_ref, **kwargs)
-            Z = torch.linalg.norm(Z) ** 2
-            r = torch.clamp(torch.sqrt(Z / (3 * 256 * 256)), min=0.05)
+            if self.noiser.__name__ == 'gaussian':
+                Z = measurement - self.operator.forward(x_ref, **kwargs)
+                Z = torch.linalg.norm(Z) ** 2
+                r = torch.clamp(torch.sqrt(Z / self.Znorm), min=self.rmin)
+            else:
+                Z = measurement - self.operator.forward(x_ref, **kwargs)
+                Z = torch.sum(Z.abs())
+                r = torch.clamp(Z / self.Znorm, min = self.rmin)
 
         # method 3: policy gradient
         _, C, H, W = x_prev.shape
         x0 = r * torch.randn((self.mc, C, H, W), device=x_0_hat.device) + x_0_hat
         x0.detach_()
+        # x0 = torch.clamp(x0, min=-1, max=1)
 
         with torch.no_grad():
             if self.mc <= 1000: difference = measurement - self.operator.forward(x0, **kwargs)
-            else: difference = torch.cat([(measurement - self.operator.forward(x_batch, **kwargs)) for x_batch in x0.chunk(10)])
-            # difference = torch.clamp(difference.abs()-0.03, min=0.)
-            # bias = 0.05 * 0.05 * 3 * 64 * 64
-            p_0l = torch.exp(- torch.abs((torch.linalg.norm(difference, dim=(1, 2, 3))**2) - self.bias) / Z ) # for Gaussian Distribution
+            else: difference = torch.cat([(measurement - self.operator.forward(x_batch, **kwargs)) for x_batch in x0.chunk(20)])
+            if self.noiser.__name__ == 'gaussian':
+                p_0l = torch.exp(- torch.abs((torch.linalg.norm(difference, dim=(1, 2, 3))**2) - self.bias) / Z) # for Gaussian Distribution
+            else:
+                p_0l = torch.exp(- torch.sum(difference.abs(), dim=(1, 2, 3)) / Z)
             pB = (torch.sum(p_0l) - p_0l) / (self.mc - 1)
             pB.detach_()
         log_q0t = torch.linalg.norm((x0 - x_0_hat), dim=(1, 2, 3))**2
         loss = torch.mean((p_0l-pB) * log_q0t)
         x_t_grad = torch.autograd.grad(outputs=loss, inputs=x_prev)[0]
+        p_mean = p_0l.mean().cpu().detach().item()
         del x0, difference, p_0l, pB, log_q0t, loss
 
         if self.prev_grad == None:
             self.prev_grad = x_t_grad
+            self.grad_scale = x_t_grad.norm()
+            tmp_grad = x_t_grad
         else:
             tmp_grad = x_t_grad
             # x_t_grad = self.beta * self.prev_grad + (1 - self.beta) * tmp_grad
             x_t_grad = self.beta * beta * self.prev_grad + (1 - self.beta * beta) * tmp_grad
             self.prev_grad = tmp_grad
+            # self.grad_scale = 0.5 * self.grad_scale + 0.5 * tmp_grad.norm()
 
         grad = x_t_grad / (x_t_grad.norm()+1e-7)
+        # grad += torch.randn_like(grad) * 0.01
+        # grad = x_t_grad / (self.grad_scale + 1e-7)
+        # grad = x_t_grad / (0.5 * self.prev_grad.norm() + 0.5 * tmp_grad.norm()+1e-7)
         # # import pdb
         # # pdb.set_trace()
         # print(norm_grad.norm(), r, loss)
@@ -167,7 +237,8 @@ class PGSampling(ConditioningMethod):
         return {'x_t_grad': grad, 'norm': norm,
                 'Z': Z,
                 'grad_norm': x_t_grad.norm().item(),
-                'r': r}
+                'r': r,
+                'p0l': p_mean}
 
     def conditioning(self, x_prev, x_t, x_0_hat, measurement, eta, beta, **kwargs):
         outs = self.grad_and_value(x_prev=x_prev, x_0_hat=x_0_hat, measurement=measurement, beta=beta, **kwargs)

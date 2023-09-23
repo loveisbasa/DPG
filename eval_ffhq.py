@@ -67,6 +67,7 @@ def get_args():
     args.edit_folder = Path(args.folder+'/recon')
 
     args.metrics = {'lpips': True,
+            'individual-lpips': True,
                     'psnr': True,
                     'fid': True,
                     'ssim': True}
@@ -94,6 +95,14 @@ def evaluate(args):
     output = torch.load(out_path) if os.path.exists(out_path) else {}
 
     device = torch.device("cpu")
+
+    if args.metrics['individual-lpips']:
+        from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
+        lpips = LearnedPerceptualImagePatchSimilarity(net_type='vgg', normalize=True, reduction='sum')
+        with open(args.folder+'/lpips.txt', 'w+') as lpips_txt:
+            for idx in range(args.num_pic):
+                score = lpips(real_tensor[idx].unsqueeze(0), recon_tensor[idx].unsqueeze(0)).cpu().detach().item()
+                lpips_txt.write("{:n}: {:.4f}\n".format(idx, score))
 
 
     # compute LPIPS w.r.t. input images
@@ -127,23 +136,18 @@ def evaluate(args):
     # compute inception scores
     if args.metrics['fid']:
 
-        from torchmetrics.image.fid import FrechetInceptionDistance
-        # real_img = torch.stack([resize(299)(i_real) for i_real in img_validation_set])
-        # fake_img = torch.stack([resize(299)(i_recon) for  i_recon in img_recon])
+        # from torchmetrics.image.fid import FrechetInceptionDistance
+        # # real_img = torch.stack([resize(299)(i_real) for i_real in img_validation_set])
+        # # fake_img = torch.stack([resize(299)(i_recon) for  i_recon in img_recon])
 
-        real_img, fake_img = torch.stack([resize(299)(i_real) for i_real in img_real]), torch.stack([resize(299)(i_recon) for  i_recon in img_recon])
+        # real_img, fake_img = torch.stack([resize(299)(i_real) for i_real in img_real]), torch.stack([resize(299)(i_recon) for  i_recon in img_recon])
 
-        fid = FrechetInceptionDistance(feature=2048, normalize=True)
-        for real_batch in real_img.chunk(10): fid.update(real_batch, real=True)
-        for fake_batch in fake_img.chunk(10): fid.update(fake_batch, real=False)
-        output['fid'] = fid.compute()
-        # from evalutils.inception import InceptionV3
-        # inception_net = InceptionV3([3]).to(args.device).eval()
-        # preds = inception_net.batch_forward(recon_tensor, 32).squeeze()
-        # mu, sigma = preds.mean(0), preds.std(0)
-
-        # import pdb
-        # pdb.set_trace()
+        # fid = FrechetInceptionDistance(feature=2048, normalize=True)
+        # for real_batch in real_img.chunk(10): fid.update(real_batch, real=True)
+        # for fake_batch in fake_img.chunk(10): fid.update(fake_batch, real=False)
+        # output['fid'] = fid.compute()
+        from cleanfid import fid
+        # output['fid'] = fid.compute_fid(args.folder + '/recon', dataset_name="FFHQ", dataset_res=256, dataset_split="train256")
 
 
 

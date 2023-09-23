@@ -66,10 +66,11 @@ def get_args():
     args.ori_folder = Path(args.folder+'/label')
     args.edit_folder = Path(args.folder+'/recon')
 
-    args.metrics = {'deit': True,
+    args.metrics = {'deit': False,
+                    'individual-lpips': True,
                     'lpips': True,
                     'psnr': True,
-                    'fid': True,
+                    'fid': False,
                     'ssim': True}
     if args.metric:
         args.metrics = {k: (k == args.metric) for k in args.metrics}
@@ -79,6 +80,7 @@ def get_args():
 def evaluate(args):
 
     label_folder, recon_folder = Path(args.folder + '/label'), Path(args.folder + '/recon')
+    all_folder = Path('/home/tanghaoyue13/dataset/dataset')
     out_path = args.folder + '/analysis.pt'
 
     # real_img, edit_img
@@ -117,9 +119,15 @@ def evaluate(args):
         acc = (pred_idx == labels).float().mean().item()
         output['Accuracy'] = 100*acc
 
-
-
     # compute LPIPS w.r.t. input images
+    if args.metrics['individual-lpips']:
+        from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
+        lpips = LearnedPerceptualImagePatchSimilarity(net_type='vgg', normalize=True, reduction='sum')
+        with open(args.folder+'/lpips.txt', 'w+') as lpips_txt:
+            for idx in range(args.num_pic):
+                score = lpips(real_tensor[idx].unsqueeze(0), recon_tensor[idx].unsqueeze(0)).cpu().detach().item()
+                lpips_txt.write("{:n}: {:.4f}\n".format(idx, score))
+
     if args.metrics['lpips']:
         from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
         lpips = LearnedPerceptualImagePatchSimilarity(net_type='vgg', normalize=True, reduction='sum')

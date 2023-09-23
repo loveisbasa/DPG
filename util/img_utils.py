@@ -205,9 +205,9 @@ def uncrop_bbox(img, mask_shape, image_size=256, margin=(16, 16), direction='l')
 
     # make mask
     mask = torch.ones([B, C, H, W], device=img.device)
-    if direction='l':
+    if direction == 'l':
         mask[..., t:t+h, w:(w+l)] = 0
-    elif direction='r':
+    elif direction == 'r':
         mask[..., t:t+h, 0:w] = 0
 
     return mask, t, t+h, l, l+w
@@ -251,7 +251,7 @@ class mask_generator:
                               margin=self.margin)
         return mask, t, tl, w, wh
 
-    def _retrieve_uncrop(self, img):
+    def _retrieve_uncrop(self, img, direction='l'):
         l, h = self.mask_len_range
         l, h = int(l), int(h)
         mask_h = 128
@@ -259,7 +259,7 @@ class mask_generator:
         mask, t, tl, w, wh = uncrop_bbox(img,
                               mask_shape=(mask_h, mask_w),
                               image_size=self.image_size,
-                              margin=self.margin)
+                              margin=self.margin, direction=direction)
         return mask, t, tl, w, wh
 
     def _retrieve_random(self, img):
@@ -276,7 +276,7 @@ class mask_generator:
         mask[:, ...] = mask_b
         return mask
 
-    def __call__(self, img):
+    def __call__(self, img, direction='l'):
         if self.mask_type == 'random':
             mask = self._retrieve_random(img)
             return mask
@@ -291,7 +291,7 @@ class mask_generator:
             mask = 1. - mask
             return mask
         elif self.mask_type == 'uncrop':
-            mask, t, th, w, wl = self._retrieve_uncrop(img)
+            mask, t, th, w, wl = self._retrieve_uncrop(img, direction=direction)
             mask = 1. - mask
             return mask
 

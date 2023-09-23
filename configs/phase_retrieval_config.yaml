@@ -1,17 +1,65 @@
 conditioning:
-  method: ps
+  # method: ps
+  # params:
+  #   scale: 1.0
+
+  # scale 300, mc 6000, 0.398!!!
+  # scale 100, mc 6000, 0.456
+  # scale 500, mc 5000
+  # scale 200, mc 600, not stable but produce a good 0.15 result
+  # scale 200, mc 500, good results, but similar stability problems.
+  # scale 500, mc 1000, bad
+  # scale 150, mc 1000, good results on .data folder
+  # scale 100, mc 1000, reasonable results on full set!!!
+  # scale 150, mc 600, reasonable and good!
+  # scale 150, mc 800, Z norm * 2.25, also reasonable
+
+  # overall problem is unstable
+  # scale 100, mc 1000, 0.699
+
+  # method: pg
+  # params:
+  #   scale: 250.
+  #   mc: 800
+  #   beta: 0.
+  #   bias: 0.
+  #   # rmin: 0.05
+  #   Znorm: 442368
+
+  # use ddim200
+  # scale 30, mc 800, succesrate 1/10
+  # scale 30, mc 800, beta0.1, success rate higher than 50%
+  # scale 50, mc 1000, beta 0.1, has some success probability
+  # scale 80, mc 1000, some success prob, but not good
+
+  # ddpm
+  # scale 150, mc 1000, beta 0.1, loss~45.1, lpips 0.763, tf black
+  # scale 200, mc 1000, beta 0.2 bf blue
+  # scale 150, mc 1000, improved results!
+  # scale 200, mc 1000, beta 0.1, eta after 0.3 * 1.5 current best.
+  method: pg
   params:
-    scale: 1.0
+    scale: 200
+    mc: 1000
+    beta: 0.1
+    clamp_r: 5.
+    rmin: 0.05
+    eta_type: ddpm
 
 data:
-  name: ffhq
-  root: ./data/samples/
+  name: exp
+  root: expdata/phase
+  # name: ffhq
+  # # root: data/samples
+  # root: /home/tanghaoyue13/dataset/ffhqvaldps
 
 measurement:
   operator:
     name: phase_retrieval
-    oversample: 2.0
+    oversample: 2.
 
-  noise: 
+  noise:
     name: gaussian
     sigma: 0.05
+    # name: gaussian
+    # sigma: 0.05

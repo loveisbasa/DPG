@@ -9,6 +9,7 @@ from motionblur.motionblur import Kernel
 
 from util.resizer import Resizer
 from util.img_utils import Blurkernel, fft2_m
+from util.jpeg_torch import jpeg_decode as jd, jpeg_encode as je
 
 
 # =================
@@ -77,7 +78,9 @@ class ColorOperator(LinearOperator):
         self.down_sample = partial(torch.mean, dim=1, keepdim=True)
 
     def forward(self, data, **kwargs):
-        return self.down_sample(data)
+        R, G, B = data[:, 0, :, :], data[:, 1, :, :], data[:, 2, :, :]
+        return (0.299 * R + 0.587 * G + 0.114 * B).unsqueeze(1)
+        # return self.down_sample(data)
 
     def transpose(self, data, **kwargs):
         # return self.up_sample(data)
@@ -88,13 +91,13 @@ class ColorOperator(LinearOperator):
 
 @register_operator(name='jpeg_restoration')
 class JpegRestorationOperator(LinearOperator):
-    def __init__(self, in_shape, scale_factor, device):
+    def __init__(self, qf, device):
         self.device = device
-        self.up_sample = partial(F.interpolate, scale_factor=scale_factor)
-        self.down_sample = Resizer(in_shape, 1/scale_factor).to(device)
+        self.jpeg_decode = partial(jd, qf = qf)
+        self.jpeg_encode = partial(je, qf = qf)
 
     def forward(self, data, **kwargs):
-        return self.down_sample(data)
+        return self.jpeg_decode(self.jpeg_encode(data))
 
     def transpose(self, data, **kwargs):
         return self.up_sample(data)
@@ -233,6 +236,7 @@ class NonlinearBlurOperator(NonLinearOperator):
         from bkse.models.kernel_encoding.kernel_wizard import KernelWizard
 
         with open(opt_yml_path, "r") as f:
+
             opt = yaml.safe_load(f)["KernelWizard"]
             model_path = opt["pretrained"]
         blur_model = KernelWizard(opt)
@@ -242,7 +246,9 @@ class NonlinearBlurOperator(NonLinearOperator):
         return blur_model
 
     def forward(self, data, **kwargs):
+        batch_size = data.size()[0]
         random_kernel = torch.randn(1, 512, 2, 2).to(self.device) * 1.2
+        random_kernel = random_kernel.expand(batch_size, -1, -1, -1)
         data = (data + 1.0) / 2.0  #[-1, 1] -> [0, 1]
         blurred = self.blur_model.adaptKernel(data, kernel=random_kernel)
         blurred = (blurred * 2.0 - 1.0).clamp(-1, 1) #[0, 1] -> [-1, 1]

@@ -194,13 +194,16 @@ class GaussianDiffusion:
             alpha_bar, alpha_bar_prev = self.alphas_cumprod[s], self.alphas_cumprod_prev[s]
             sigma = (1 - alpha_bar_prev) / (1 - alpha_bar) * (1 - alpha_bar / alpha_bar_prev)
             if self.name == 'ddim':
-                eta = 1.
-                # alpha_bar, alpha_bar_prev = self.alphas_cumprod[s], self.alphas_cumprod_prev[s]
-                # eta = np.sqrt(alpha_bar_prev * (1 - alpha_bar) / alpha_bar) - np.sqrt(1 - alpha_bar_prev - sigma)
+                eta = np.sqrt(alpha_bar_prev * (1 - alpha_bar) / alpha_bar) - np.sqrt(1 - alpha_bar_prev) if idx > 1 else 0.
+                beta = 1.
             else:
                 beta = self.betas[s]
-                eta = beta / np.sqrt(1 - beta) / np.sqrt(1 - alpha_bar)
-            beta = 1. * idx / self.num_timesteps
+                eta = beta / np.sqrt(1 - beta) / np.sqrt(1 - alpha_bar) if idx > 1 else 0.
+                # momentum beta
+                beta = 1. * idx / self.num_timesteps
+                # if idx > 0.7 * self.num_timesteps: beta = 0.
+                # if idx > self.num_timesteps * 0.3: eta = eta * 1.5
+            r = np.sqrt(sigma**2 / (1. + sigma ** 2))
 
             # Give condition.
             noisy_measurement = self.q_sample(measurement, t=time)
@@ -211,7 +214,7 @@ class GaussianDiffusion:
                                       noisy_measurement=noisy_measurement,
                                       x_prev=img,
                                       x_0_hat=out['pred_xstart'],
-                                      r=1. * idx / self.num_timesteps,
+                                      r=r,
                                       eta=eta,
                                       beta=beta
                                       )
@@ -223,6 +226,8 @@ class GaussianDiffusion:
                 writer.add_scalar('grad/norml2'+str(num_run), outs['grad_norm'], self.num_timesteps-idx-1)
                 writer.add_scalar('loos-gradnorm-dps/l2'+str(num_run), outs['grad_norm'], distance)
                 writer.add_scalar('ddimsteps', eta, self.num_timesteps-idx-1)
+                writer.add_scalar('Z'+str(num_run), outs['Z'], self.num_timesteps-idx-1)
+                writer.add_scalar('p_0l'+str(num_run), outs['p0l'], self.num_timesteps-idx-1)
                 # writer.add_scalar('r', outs['r'], self.num_timesteps-idx-1)
             # # writer.add_scalar('p0l_mu_var/mean'+str(num_run), p_0l_mu, self.num_timesteps-idx-1)
             # writer.add_scalar('p0l_mu_var/mean'+str(num_run), outs['p_0l'].mean(), self.num_timesteps-idx-1)

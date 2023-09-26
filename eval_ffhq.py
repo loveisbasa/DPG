@@ -70,7 +70,7 @@ def get_args():
             'individual-lpips': True,
                     'psnr': True,
                     'fid': True,
-                    'ssim': True}
+                    'ssim': False}
     if args.metric:
         args.metrics = {k: (k == args.metric) for k in args.metrics}
 
@@ -94,7 +94,7 @@ def evaluate(args):
 
     output = torch.load(out_path) if os.path.exists(out_path) else {}
 
-    device = torch.device("cpu")
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     if args.metrics['individual-lpips']:
         from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
@@ -135,19 +135,87 @@ def evaluate(args):
 
     # compute inception scores
     if args.metrics['fid']:
+        from torchmetrics.image.fid import FrechetInceptionDistance
+
+        real_img, fake_img = torch.stack([resize(299)(i_real) for i_real in img_real]), torch.stack([resize(299)(i_recon) for  i_recon in img_recon])
+
+        fid = FrechetInceptionDistance(feature=2048, normalize=True).to(device)
+        for real_batch in real_img.chunk(10): fid.update(real_batch.to(device), real=True)
+        for fake_batch in fake_img.chunk(10): fid.update(fake_batch.to(device), real=False)
+        output['fid'] = fid.compute()
+
+        from pytorch_fid.inception import InceptionV3
+        block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[2048]
+        model = InceptionV3([block_idx]).to(device)
+        fake_img = torch.stack([resize(299)(i_recon) for i_recon in img_recon])
+        real_img = torch.stack([resize(299)(i_recon) for i_recon in img_real])
+        real_pred, fake_pred = np.empty((real_img.shape[0], 2048)), np.empty((fake_img.shape[0], 2048))
+        start_idx = 0
+        for real_batch, fake_batch in zip(real_img.chunk(32), fake_img.chunk(32)):
+            with torch.no_grad():
+                real_stats, fake_stats = model(real_batch.to(device))[0], model(fake_batch.to(device))[0]
+            real_stats, fake_stats = real_stats.squeeze(3).squeeze(2).cpu().numpy(), fake_stats.squeeze(3).squeeze(2).cpu().numpy()
+            real_pred[start_idx:start_idx + real_stats.shape[0]], fake_pred[start_idx:start_idx + fake_stats.shape[0]] = real_stats, fake_stats
+            start_idx += real_stats.shape[0]
+        mu, mu_ref = np.mean(real_pred, axis=0), np.mean(fake_pred, axis=0)
+        sigma, sigma_ref = np.cov(real_pred, rowvar=False), np.cov(fake_pred, rowvar=False)
+        import pdb
+        pdb.set_trace()
+        # # pred_arr = np.empty((fake_img.shape[0], 2048))
+        # # start_idx = 0
+        # # for batch in fake_img.chunk(10):
+        # #     batch = batch.to(device)
+        # #     with torch.no_grad():
+        # #         pred = model(batch)[0]
+        # #     pred = pred.squeeze(3).squeeze(2).cpu().numpy()
+        # #     pred_arr[start_idx:start_idx + pred.shape[0]] = pred
+        # #     start_idx += pred.shape[0]
+
+        # import pdb
+        # pdb.set_trace()
+
+        # fake_img = torch.stack([resize(299)(i_recon) for  i_recon in img_recon])
+        # pred_arr = np.empty((fake_img.shape[0], 2048))
+        # start_idx = 0
+        # for real_batc, fake_batch in zip(real_tensor.chunk(32), recon_tensor.chunk(32)):
+        #     batch = batch.to(device)
+        #     with torch.no_grad():
+        #         pred = model(batch)[0]
+        #     pred = pred.squeeze(3).squeeze(2).cpu().numpy()
+        #     pred_arr[start_idx:start_idx + pred.shape[0]] = pred
+        #     start_idx += pred.shape[0]
+
+        # mu = np.mean(pred, axis=0)
+        # sigma = np.cov(pred, rowvar=False)
+
+
+        # mu_ref = training_stats['mu']
+        # sigma_ref = training_stats['sigma']
+
+
+
+
+
 
         # from torchmetrics.image.fid import FrechetInceptionDistance
-        # # real_img = torch.stack([resize(299)(i_real) for i_real in img_validation_set])
-        # # fake_img = torch.stack([resize(299)(i_recon) for  i_recon in img_recon])
+        # # real_img_folder = Path("/home/tanghaoyue13/dataset/ffhq256")
+        # fpaths = sorted(glob("/home/tanghaoyue13/dataset/ffhq256" + '/**/*.png', recursive=True))
+        # img_validation_set = [load(x) for x in fpaths]
+        # fake_img = torch.stack([resize(299)(i_recon) for i_recon in img_recon])
+        # real_img = torch.stack([resize(299)(i_recon) for i_recon in img_validation_set])
 
-        # real_img, fake_img = torch.stack([resize(299)(i_real) for i_real in img_real]), torch.stack([resize(299)(i_recon) for  i_recon in img_recon])
+        # # real_img, fake_img = torch.stack([resize(299)(i_real) for i_real in img_real]), torch.stack([resize(299)(i_recon) for  i_recon in img_recon])
 
-        # fid = FrechetInceptionDistance(feature=2048, normalize=True)
-        # for real_batch in real_img.chunk(10): fid.update(real_batch, real=True)
-        # for fake_batch in fake_img.chunk(10): fid.update(fake_batch, real=False)
+        # fid = FrechetInceptionDistance(feature=2048, normalize=True).to(device)
+        # batch_idx = 0
+        # for real_batch in real_img.chunk(10):
+        #     print(batch_idx)
+        #     batch_idx += 1
+        #     fid.update(real_batch.to(device), real=True)
+        # for fake_batch in fake_img.chunk(10): fid.update(fake_batch.to(device), real=False)
         # output['fid'] = fid.compute()
-        from cleanfid import fid
-        # output['fid'] = fid.compute_fid(args.folder + '/recon', dataset_name="FFHQ", dataset_res=256, dataset_split="train256")
+        # # from cleanfid import fid
+        # # # output['fid'] = fid.compute_fid(args.folder + '/recon', dataset_name="FFHQ", dataset_res=256, dataset_split="train256")
 
 
 

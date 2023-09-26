@@ -15,7 +15,7 @@ from guided_diffusion.unet import create_model
 from guided_diffusion.gaussian_diffusion import create_sampler
 # from guided_diffusion.gaussian_diffusion import create_diffusion
 from data.dataloader import get_dataset, get_dataloader
-from util.img_utils import clear_color, mask_generator
+from util.img_utils import clear_color, mask_generator, clear
 from util.logger import get_logger
 
 # tensorboard for debugging
@@ -24,6 +24,14 @@ from torch.utils.tensorboard import SummaryWriter
 import time
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from torchmetrics.image import PeakSignalNoiseRatio
+
+def setup_seed(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    import random
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
 
 
 
@@ -41,9 +49,12 @@ def main():
     parser.add_argument('--task_config', type=str)
     parser.add_argument('--gpu', type=int, default=0)
     parser.add_argument('--save_dir', type=str, default='./results')
-    parser.add_argument('--record', type=bool, default=False)
+    parser.add_argument('--record', action="store_true")
     parser.add_argument('--n', type=int, default=100)
+    parser.add_argument('--start_n', type=int, default=0)
     args = parser.parse_args()
+
+    setup_seed(0)
 
     # logger
     logger = get_logger()
@@ -51,6 +62,8 @@ def main():
         writer = SummaryWriter()
     else:
         writer = None
+    if args.record:
+        record_loss = np.zeros((args.n, 1000))
 
     # Device setting
     device_str = f"cuda:{args.gpu}" if torch.cuda.is_available() else 'cpu'
@@ -90,7 +103,11 @@ def main():
     # sample_fn = partial(sample_fn, model, (1, 3, model_config['image_size'], model_config['image_size']), clip_denoised=diffusion_config['clip_denoised'])
 
     # Working directory
-    out_path = os.path.join(args.save_dir, measure_config['operator']['name']+'_'+task_config['data']['name']+'_'+task_config['conditioning']['method'])
+    if measure_config['operator']['name'] == 'inpainting':
+        task_name = 'inpainting_' + measure_config['mask_opt']['mask_type']
+    else:
+        task_name = measure_config['operator']['name']
+    out_path = os.path.join(args.save_dir, task_name+'_'+task_config['data']['name']+'_'+task_config['conditioning']['method'])
     os.makedirs(out_path, exist_ok=True)
     for img_dir in ['input', 'recon', 'progress', 'label']:
         os.makedirs(os.path.join(out_path, img_dir), exist_ok=True)
@@ -99,7 +116,7 @@ def main():
 
     # Prepare dataloader
     data_config = task_config['data']
-    if task_config['data']['name'] == 'ffhq':
+    if task_config['data']['name'] == 'ffhq' or task_config['data']['name'] == 'exp':
         transform = transforms.Compose([transforms.ToTensor(),
                                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     elif task_config['data']['name'] == 'imagenet':
@@ -127,6 +144,7 @@ def main():
 
     # Do Inference
     for i, ref_img in enumerate(loader):
+        if i < args.start_n: continue
         logger.info(f"Inference for image {i}")
         fname = str(i).zfill(5) + '.png'
         ref_img = ref_img.to(device)
@@ -150,7 +168,12 @@ def main():
         # Sampling
         x_start = torch.randn(ref_img.shape, device=device).requires_grad_()
         t_start = time.time()
-        sample = sample_fn(x_start=x_start, measurement=y_n, record=args.record, save_root=out_path, num_run=i)
+        sample, outs = sample_fn(x_start=x_start, measurement=y_n, record=args.record, save_root=out_path, num_run=i)
+
+        if args.record:
+            record_loss[i] = np.array(outs['reconloss'])
+
+
         total_time += (time.time() - t_start)
 
         # lpips
@@ -160,7 +183,10 @@ def main():
         print('LPIPS: ', lpips_score,
             'Reconstruction MSE: ', psnr)
 
-        plt.imsave(os.path.join(out_path, 'input', fname), clear_color(y_n))
+        if measure_config['operator']['name'] == 'color':
+            plt.imsave(os.path.join(out_path, 'input', fname), clear(y_n), cmap='gray')
+        else:
+            plt.imsave(os.path.join(out_path, 'input', fname), clear_color(y_n))
         plt.imsave(os.path.join(out_path, 'label', fname), clear_color(ref_img))
         plt.imsave(os.path.join(out_path, 'recon', fname), clear_color(sample))
         # if measure_config['operator']['name'] == 'inpainting':
@@ -171,6 +197,8 @@ def main():
             break
     output = {'per_img_timer': total_time / (i + 1)}
     analysis_pt = out_path + '/analysis.pt'
+    if args.record:
+        np.save(cond_config['method'], record_loss)
     print(analysis_pt)
     torch.save(output, analysis_pt)
 

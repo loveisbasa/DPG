@@ -67,10 +67,10 @@ def get_args():
     args.edit_folder = Path(args.folder+'/recon')
 
     args.metrics = {'deit': False,
-                    'individual-lpips': True,
-                    'lpips': True,
-                    'psnr': True,
-                    'fid': False,
+                    'individual-lpips': False,
+                    'lpips': False,
+                    'psnr': False,
+                    'fid': True,
                     'ssim': True}
     if args.metric:
         args.metrics = {k: (k == args.metric) for k in args.metrics}
@@ -97,6 +97,8 @@ def evaluate(args):
     labels = [idx for idx in range(1000)]
     labels = torch.tensor(labels[0:args.num_pic])
     real_tensor, recon_tensor = torch.stack([T.ToTensor()(x) for x in img_real]), torch.stack([T.ToTensor()(x) for x in img_recon])
+
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
 
     output = {}
@@ -162,9 +164,9 @@ def evaluate(args):
 
         real_img, fake_img = torch.stack([resize(299)(i_real) for i_real in img_real]), torch.stack([resize(299)(i_recon) for  i_recon in img_recon])
 
-        fid = FrechetInceptionDistance(feature=2048, normalize=True)
-        for real_batch in real_img.chunk(10): fid.update(real_batch, real=True)
-        for fake_batch in fake_img.chunk(10): fid.update(fake_batch, real=False)
+        fid = FrechetInceptionDistance(feature=2048, normalize=True).to(device)
+        for real_batch in real_img.chunk(10): fid.update(real_batch.to(device), real=True)
+        for fake_batch in fake_img.chunk(10): fid.update(fake_batch.to(device), real=False)
         output['fid'] = fid.compute()
 
 

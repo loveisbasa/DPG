@@ -181,6 +181,7 @@ class GaussianDiffusion:
         """
         img = x_start
         device = x_start.device
+        out_record = {'reconloss': [0. for _ in range(1000)]}
 
         pbar = tqdm(list(range(self.num_timesteps))[::-1])
         for idx in pbar:
@@ -192,18 +193,16 @@ class GaussianDiffusion:
             s = idx # current time
 
             alpha_bar, alpha_bar_prev = self.alphas_cumprod[s], self.alphas_cumprod_prev[s]
+            r_square = 1 - alpha_bar
             sigma = (1 - alpha_bar_prev) / (1 - alpha_bar) * (1 - alpha_bar / alpha_bar_prev)
             if self.name == 'ddim':
-                eta = np.sqrt(alpha_bar_prev * (1 - alpha_bar) / alpha_bar) - np.sqrt(1 - alpha_bar_prev) if idx > 1 else 0.
+                eta = 1. if idx > 0 else 0.
                 beta = 1.
             else:
                 beta = self.betas[s]
+                # eta = 1.
                 eta = beta / np.sqrt(1 - beta) / np.sqrt(1 - alpha_bar) if idx > 1 else 0.
-                # momentum beta
                 beta = 1. * idx / self.num_timesteps
-                # if idx > 0.7 * self.num_timesteps: beta = 0.
-                # if idx > self.num_timesteps * 0.3: eta = eta * 1.5
-            r = np.sqrt(sigma**2 / (1. + sigma ** 2))
 
             # Give condition.
             noisy_measurement = self.q_sample(measurement, t=time)
@@ -214,8 +213,9 @@ class GaussianDiffusion:
                                       noisy_measurement=noisy_measurement,
                                       x_prev=img,
                                       x_0_hat=out['pred_xstart'],
-                                      r=r,
+                                      eps=out['eps'],
                                       eta=eta,
+                                      r=np.sqrt(1-alpha_bar_prev),
                                       beta=beta
                                       )
             img = img.detach_()
@@ -225,36 +225,24 @@ class GaussianDiffusion:
                 writer.add_scalar('Loss/ps'+str(num_run), distance, self.num_timesteps-idx-1)
                 writer.add_scalar('grad/norml2'+str(num_run), outs['grad_norm'], self.num_timesteps-idx-1)
                 writer.add_scalar('loos-gradnorm-dps/l2'+str(num_run), outs['grad_norm'], distance)
-                writer.add_scalar('ddimsteps', eta, self.num_timesteps-idx-1)
-                writer.add_scalar('Z'+str(num_run), outs['Z'], self.num_timesteps-idx-1)
-                writer.add_scalar('p_0l'+str(num_run), outs['p0l'], self.num_timesteps-idx-1)
+                # writer.add_scalar('ddimsteps', eta, self.num_timesteps-idx-1)
+                # writer.add_scalar('Z'+str(num_run), outs['Z'], self.num_timesteps-idx-1)
+                # writer.add_scalar('p_0l'+str(num_run), outs['p0l'], self.num_timesteps-idx-1)
                 # writer.add_scalar('r', outs['r'], self.num_timesteps-idx-1)
             # # writer.add_scalar('p0l_mu_var/mean'+str(num_run), p_0l_mu, self.num_timesteps-idx-1)
             # writer.add_scalar('p0l_mu_var/mean'+str(num_run), outs['p_0l'].mean(), self.num_timesteps-idx-1)
             # # writer.add_scalar('err/mean'+str(num_run), err.mean(), self.num_timesteps-idx-1)
             # writer.add_scalar('err/Z'+str(num_run), outs['Z'], self.num_timesteps-idx-1)
 
-            # for trial_idx in range(10):
-            #     img.requires_grad_()
-            #     out = self.p_sample(x=img, t=time, model=model)
-            #     noisy_measurement = self.q_sample(measurement, t=time)
-            #     img, distance, grad_norm = measurement_cond_fn(x_t=out['sample'],
-            #                           measurement=measurement,
-            #                           noisy_measurement=noisy_measurement,
-            #                           x_prev=img,
-            #                           x_0_hat=out['pred_xstart'],
-            #                           r=sigma,
-            #                           eta=eta)
-            #     img = img.detach_()
-            #     print(distance)
-
             pbar.set_postfix({'distance': distance.item(), 'grad_norm': outs['grad_norm'], 'eta': eta}, refresh=False)
             if record:
-                if idx % 10 == 0:
+                out_record['reconloss'][idx] = distance.item()
+                if idx == 999 or idx % 10 == 0:
                     file_path = os.path.join(save_root, f"progress/x_{str(idx).zfill(4)}.png")
-                    plt.imsave(file_path, clear_color(img))
+                    # plt.imsave(file_path, clear_color(img))
+                    plt.imsave(file_path, clear_color(out['pred_xstart']))
 
-        return img
+        return img, out_record
 
     def p_sample(self, model, x, t):
         raise NotImplementedError
@@ -279,7 +267,8 @@ class GaussianDiffusion:
         return {'mean': model_mean,
                 'variance': model_variance,
                 'log_variance': model_log_variance,
-                'pred_xstart': pred_xstart}
+                'pred_xstart': pred_xstart,
+                'eps': model_output}
 
 
     def _scale_timesteps(self, t):
@@ -424,7 +413,7 @@ class DDPM(SpacedDiffusion):
         if t != 0:  # no noise when t == 0
             sample += torch.exp(0.5 * out['log_variance']) * noise
 
-        return {'sample': sample, 'pred_xstart': out['pred_xstart'], 'log_variance': out['log_variance']}
+        return {'sample': sample, 'pred_xstart': out['pred_xstart'], 'log_variance': out['log_variance'], 'eps': out['eps']}
 
 
 @register_sampler(name='ddim')
@@ -434,6 +423,8 @@ class DDIM(SpacedDiffusion):
         super().__init__(**kwargs)
 
     def p_sample(self, model, x, t, eta=0.0):
+
+
         out = self.p_mean_variance(model, x, t)
 
         eps = self.predict_eps_from_x_start(x, t, out['pred_xstart'])
@@ -456,7 +447,7 @@ class DDIM(SpacedDiffusion):
         if t != 0:
             sample += sigma * noise
 
-        return {"sample": sample, "pred_xstart": out["pred_xstart"]}
+        return {"sample": sample, "pred_xstart": out["pred_xstart"], "eps": out['eps']}
 
     def predict_eps_from_x_start(self, x_t, t, pred_xstart):
         coef1 = extract_and_expand(self.sqrt_recip_alphas_cumprod, t, x_t)

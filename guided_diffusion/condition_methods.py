@@ -25,7 +25,7 @@ class ConditioningMethod(ABC):
     def project(self, data, noisy_measurement, **kwargs):
         return self.operator.project(data=data, measurement=noisy_measurement, **kwargs)
 
-    def grad_and_value(self, x_prev, x_0_hat, measurement, r, **kwargs):
+    def grad_and_value(self, x_prev, x_0_hat, measurement, **kwargs):
         if self.noiser.__name__ == 'gaussian':
             difference = measurement - self.operator.forward(x_0_hat, **kwargs)
             norm = torch.linalg.norm(difference)
@@ -81,8 +81,8 @@ class PosteriorSampling(ConditioningMethod):
         super().__init__(operator, noiser)
         self.scale = kwargs.get('scale', 1.0)
 
-    def conditioning(self, x_prev, x_t, x_0_hat, measurement, r, **kwargs):
-        norm_grad, norm = self.grad_and_value(x_prev=x_prev, x_0_hat=x_0_hat, measurement=measurement, r=r, **kwargs)
+    def conditioning(self, x_prev, x_t, x_0_hat, measurement, **kwargs):
+        norm_grad, norm = self.grad_and_value(x_prev=x_prev, x_0_hat=x_0_hat, measurement=measurement, **kwargs)
         x_t -= norm_grad * self.scale
         outs = {'norm': norm, 'grad_norm': norm_grad.norm().cpu().item()}
 
@@ -159,7 +159,6 @@ class LGDMCSampling(ConditioningMethod):
         x_t += self.scale * eta * outs['x_t_grad']
         norm = outs['norm']
         return x_t, norm, outs
-
 
 @register_conditioning_method(name='pg')
 class PGSampling(ConditioningMethod):

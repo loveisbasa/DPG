@@ -125,6 +125,9 @@ def main():
                                         transforms.CenterCrop((256, 256)),
                                         transforms.ToTensor(),
                                         transforms.Lambda(rescale)])
+    elif task_config['data']['name'] == 'lsun':
+        transform = transforms.Compose([transforms.ToTensor(),
+                                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     else:
         raise ValueError(f"Unknown dataset {data_config['data']}")
     dataset = get_dataset(**data_config, transforms=transform)

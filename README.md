@@ -1,11 +1,11 @@
-# Diffusion Posterior Sampling for General Noisy Inverse Problems (ICLR 2023 spotlight)
+# Solving General Inverse Problems via Posterior Sampling: A Policy Gradient Viewpoint (AISTATS 2024)
 
 ![result-gif1](./figures/motion_blur.gif)
 ![result-git2](./figures/super_resolution.gif)
 <!-- See more results in the [project-page](https://jeongsol-kim.github.io/dps-project-page) -->
 
 ## Abstract
-In this work, we extend diffusion solvers to efficiently handle general noisy (non)linear inverse problems via the approximation of the posterior sampling. Interestingly, the resulting posterior sampling scheme is a blended version of the diffusion sampling with the manifold constrained gradient without strict measurement consistency projection step, yielding more desirable generative path in noisy settings compared to the previous studies.
+Solving image inverse problems (e.g., super-resolution and inpainting) requires generating a high fidelity image that matches the given input (the low-resolution image or the masked image). By using the input image as guidance, we can leverage a pretrained diffusion generative model to solve a wide range of image inverse tasks without task specific model fine-tuning. To precisely estimate the guidance score function of the input image, we propose Diffusion Policy Gradient (DPG), a tractable computation method by viewing the intermediate noisy images as policies and the target image as the states selected by the policy. Experiments show that our method is robust to both Gaussian and Poisson noise degradation on multiple linear and non-linear inverse tasks, resulting into a higher image restoration quality on FFHQ, ImageNet and LSUN datasets.
 
 ![cover-img](./figures/cover.jpg)
 

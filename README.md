@@ -1,14 +1,15 @@
 # Solving General Inverse Problems via Posterior Sampling: A Policy Gradient Viewpoint (AISTATS 2024)
 
-![result-gif1](./figures/motion_blur.gif)
-![result-git2](./figures/super_resolution.gif)
 <!-- See more results in the [project-page](https://jeongsol-kim.github.io/dps-project-page) -->
 
 ## Abstract
-Solving image inverse problems (e.g., super-resolution and inpainting) requires generating a high fidelity image that matches the given input (the low-resolution image or the masked image). By using the input image as guidance, we can leverage a pretrained diffusion generative model to solve a wide range of image inverse tasks without task specific model fine-tuning. To precisely estimate the guidance score function of the input image, we propose Diffusion Policy Gradient (DPG), a tractable computation method by viewing the intermediate noisy images as policies and the target image as the states selected by the policy. Experiments show that our method is robust to both Gaussian and Poisson noise degradation on multiple linear and non-linear inverse tasks, resulting into a higher image restoration quality on FFHQ, ImageNet and LSUN datasets.
+In this work, we solve image inverse problems (e.g., inpainting, super-resolution, deblurring) using a pretrained diffusion model. We improve the conditional score function estimated by DPS though the policy gradient method in reinforcement learning. To precisely estimate the guidance score function of the input image, we propose Diffusion Policy Gradient (DPG), a tractable computation method by viewing the intermediate noisy images as policies and the target image as the states selected by the policy. Experiments show that our method is robust to both Gaussian and Poisson noise degradation on multiple linear and non-linear inverse tasks, resulting into a higher image restoration quality on FFHQ, ImageNet and LSUN datasets.
 
-![cover-img](./figures/cover.jpg)
+![cover-img](./figures/cover.png)
 
+This implementation is based on / inspired by:
+
+https://github.com/DPS2022/diffusion-posterior-sampling (DPS)
 
 ## Prerequisites
 - python 3.8
@@ -17,11 +18,6 @@ Solving image inverse problems (e.g., super-resolution and inpainting) requires 
 
 - CUDA 11.3.1
 
-- nvidia-docker (if you use GPU in docker container)
-
-It is okay to use lower version of CUDA with proper pytorch version.
-
-Ex) CUDA 10.2 with pytorch 1.7.0
 
 <br />
 
@@ -30,14 +26,16 @@ Ex) CUDA 10.2 with pytorch 1.7.0
 ### 1) Clone the repository
 
 ```
-git clone https://github.com/DPS2022/diffusion-posterior-sampling
+git clone https://github.com/loveisbasa/DPG.git
 
-cd diffusion-posterior-sampling
+cd DPG
 ```
 
 <br />
 
 ### 2) Download pretrained checkpoint
+The FFHQ pretrained model is from the DPS repo. The pretrained model for ImageNet (unconditional 256*256 ImageNet model) and LSUN (lsum_bedroom.pt) are from the guided diffusion paper from OpenAI https://github.com/openai/guided-diffusion. We store all the models in a folder.
+
 From the [link](https://drive.google.com/drive/folders/1jElnRoFv7b31fG0v6pTSQkelbSX3xGZh?usp=sharing), download the checkpoint "ffhq_10m.pt" and paste it to ./models/
 ```
 mkdir models
@@ -73,23 +71,6 @@ pip install -r requirements.txt
 pip install torch==1.11.0+cu113 torchvision==0.12.0+cu113 torchaudio==0.11.0 --extra-index-url https://download.pytorch.org/whl/cu113
 ```
 
-<br />
-
-### [Option 2] Build Docker image
-
-Install docker engine, GPU driver and proper cuda before running the following commands.
-
-Dockerfile already contains command to clone external codes. You don't have to clone them again.
-
---gpus=all is required to use local GPU device (Docker >= 19.03)
-
-```
-docker build -t dps-docker:latest .
-
-docker run -it --rm --gpus=all dps-docker
-```
-
-<br />
 
 ### 4) Inference
 
@@ -123,7 +104,6 @@ python3 sample_condition.py --model_config=configs/model_config.yaml --diffusion
 
 # Non-linear inverse problems
 - configs/nonlinear_deblur_config.yaml
-- configs/phase_retrieval_config.yaml
 ```
 
 ### Structure of task configurations
@@ -153,12 +133,15 @@ noise:
 If you find our work interesting, please consider citing
 
 ```
-@inproceedings{
-chung2023diffusion,
-title={Diffusion Posterior Sampling for General Noisy Inverse Problems},
-author={Hyungjin Chung and Jeongsol Kim and Michael Thompson Mccann and Marc Louis Klasky and Jong Chul Ye},
-booktitle={The Eleventh International Conference on Learning Representations },
-year={2023},
-url={https://openreview.net/forum?id=OnD9zGAGT0k}
+@inproceedings{tang2024solving,
+      title={Solving General Noisy Inverse Problem via Posterior Sampling: A Policy Gradient Viewpoint},
+      author={Haoyue Tang and Tian Xie and Aosong Feng and Hanyu Wang and Chenyang Zhang and Yang Bai},
+      booktitle = {Proceedings of The 27th International Conference on Artificial Intelligence and Statistics},
+      year={2024},
+      series = 	 {Proceedings of Machine Learning Research},
+      month = {2--4 May},
+      eprint={2403.10585},
+      archivePrefix={arXiv},
+      primaryClass={eess.IV}
 }
 ```

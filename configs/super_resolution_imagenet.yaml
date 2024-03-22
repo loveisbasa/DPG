@@ -3,16 +3,16 @@ conditioning:
   # params:
   #   scale: 1.
 
-  # # for ddpm, poisson&gaussian noise
+  # # for ddpm, gaussian and poisson noise
   # method: pg
   # params:
-  #   scale: 200.
+  #   scale: 160.
   #   mc: 500
   #   beta: 0.
   #   bias: 0.
   #   rmin: 0.05
 
-  # # for ddim
+  # for DDIM accelerator
   method: pg
   params:
     scale: 80.
@@ -23,8 +23,10 @@ conditioning:
 
 
 data:
-  name: lsun
-  root: /home/tanghaoyue13/dataset/LSUN-bedroom
+  name: imagenet
+  root: /home/tanghaoyue13/dataset/dataset
+  # name: uscsipi
+  # root: /home/tanghaoyue13/dataset/uscsipi
 
 measurement:
   operator:

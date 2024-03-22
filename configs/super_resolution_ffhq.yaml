@@ -3,30 +3,18 @@ conditioning:
   # params:
   #   scale: 1.
 
-  # # DDPM, LPIPS~0.216
-  # method: pg
-  # params:
-  #   scale: 102.
-  #   mc: 1000
-  #   beta: 0.
-  #   bias: 30.72
-  #   rmin: 0.05
-  #   # notice, bias go with noise
-
-  # # DDPM, LPIPS~0.217
+  # # DDPM, LPIPS~0.217, average pooling gaussian, scale 120, mc 800
   method: pg
   params:
-    scale: 120.
-    mc: 800
+    scale: 2000.
+    mc: 500
     beta: 0.
     bias: 0.
     rmin: 0.05
 
 data:
   name: ffhq
-  # root: /home/tanghaoyue13/dataset/ffhqval
   root: /home/tanghaoyue13/dataset/ffhqvaldps
-  # root: ./data/ffhq
 
 measurement:
   operator:
@@ -35,6 +23,8 @@ measurement:
     scale_factor: 4
 
   noise:
+    # name: poisson
+    # rate: 1.0
     name: gaussian
     sigma: 0.05
     # sigma: 0.05

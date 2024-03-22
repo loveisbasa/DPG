@@ -1,0 +1,34 @@
+conditioning:
+  # method: ps
+  # params:
+  #   scale: 0.4
+
+  method: pg
+  # ddpm
+  # params:
+  #   scale: 200.
+  #   mc: 500
+  #   beta: 0.0
+
+  # ddim
+  params:
+    scale: 100
+    mc: 3000
+    beta: 0.0
+
+data:
+  name: lsun
+  root: /home/tanghaoyue13/dataset/LSUN-bedroom
+
+
+measurement:
+  operator:
+    name: gaussian_blur
+    kernel_size: 61
+    intensity: 3.0
+
+  noise:
+    # name: poisson
+    # rate: 1.0
+    name: gaussian
+    sigma: 0.05

@@ -1,19 +1,23 @@
 conditioning:
   # method: ps
   # params:
-  #   scale: 0.3
-  # method: pg
+  #   scale: 0.4
+
+  # ddpm
   # params:
-  #   scale: 1.
+  #   scale: 200.
+  #   mc: 500
+  #   beta: 0.0
+
+  # ---DDIM 200
   method: pg
   params:
-    scale: 200.
-    mc: 500
-    beta: 0.1
+    scale: 150.
+    mc: 1500
+    beta: 0.0
 
 data:
   name: imagenet
-  # root: ./data/samples/
   root: /home/tanghaoyue13/dataset/dataset
 
 
@@ -24,5 +28,7 @@ measurement:
     intensity: 3.0
 
   noise:
+    # name: poisson
+    # rate: 1.0
     name: gaussian
     sigma: 0.05

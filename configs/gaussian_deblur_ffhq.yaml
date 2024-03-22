@@ -1,0 +1,36 @@
+conditioning:
+  # method: ps
+  # params:
+  #   scale: 1.
+
+  # # for ddpm very good!!! ～0.216
+  method: pg
+  params:
+    scale: 1.
+    mc: 1000
+    beta: 0.1
+
+  # scale 120, ~0.253
+  # scale 100, ~0.234
+  # method: pg
+  # params:
+  #   scale: 120.
+  #   mc: 800
+  #   beta: 0.
+
+data:
+  name: ffhq
+  root: /home/tanghaoyue13/projects/diffusion-posterior-sampling/.results/ddpm/gaussian_blur_ffhq_pg/label
+
+
+measurement:
+  operator:
+    name: gaussian_blur
+    kernel_size: 61
+    intensity: 3.0
+
+  noise:
+    name: poisson
+    rate: 1.0
+    # name: gaussian
+    # sigma: 0.05

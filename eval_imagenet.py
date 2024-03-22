@@ -67,9 +67,9 @@ def get_args():
     args.edit_folder = Path(args.folder+'/recon')
 
     args.metrics = {'deit': False,
-                    'individual-lpips': False,
-                    'lpips': False,
-                    'psnr': False,
+                    'individual-lpips': True,
+                    'lpips': True,
+                    'psnr': True,
                     'fid': True,
                     'ssim': True}
     if args.metric:
@@ -147,7 +147,8 @@ def evaluate(args):
 
     if args.metrics['psnr']:
         from torchmetrics.image import PeakSignalNoiseRatio
-        metric = PeakSignalNoiseRatio()
+        metric = PeakSignalNoiseRatio(reduction='none')
+        # metric.update(real, fake)
         output['psnr'] = metric(real, fake)
 
     if args.metrics['ssim']:

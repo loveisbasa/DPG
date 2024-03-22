@@ -70,7 +70,7 @@ def get_args():
             'individual-lpips': True,
                     'psnr': True,
                     'fid': True,
-                    'ssim': False}
+                    'ssim': True}
     if args.metric:
         args.metrics = {k: (k == args.metric) for k in args.metrics}
 
@@ -82,9 +82,6 @@ def evaluate(args):
     out_path = args.folder + '/analysis.pt'
 
     # real_img, edit_img
-    img_folder = Path("/home/tanghaoyue13/dataset/ffhqval")
-    img_validation_set = [load(x) for x in img_folder.iterdir()]
-    img_validation_set = img_validation_set[1000:]
     label_paths, recon_paths = [x for x in label_folder.iterdir()], [x for x in recon_folder.iterdir()]
     if args.num_pic > 0:
         label_paths, recon_paths = label_paths[:args.num_pic], recon_paths[:args.num_pic]
@@ -159,8 +156,6 @@ def evaluate(args):
             start_idx += real_stats.shape[0]
         mu, mu_ref = np.mean(real_pred, axis=0), np.mean(fake_pred, axis=0)
         sigma, sigma_ref = np.cov(real_pred, rowvar=False), np.cov(fake_pred, rowvar=False)
-        import pdb
-        pdb.set_trace()
         # # pred_arr = np.empty((fake_img.shape[0], 2048))
         # # start_idx = 0
         # # for batch in fake_img.chunk(10):

@@ -73,7 +73,8 @@ class ManifoldConstraintGradient(ConditioningMethod):
 
         # projection
         x_t = self.project(data=x_t, noisy_measurement=noisy_measurement, **kwargs)
-        return x_t, norm
+        outs = {'norm': norm, 'grad_norm': norm_grad.norm().cpu().item()}
+        return x_t, norm, outs
 
 @register_conditioning_method(name='ps')
 class PosteriorSampling(ConditioningMethod):
@@ -174,16 +175,23 @@ class PGSampling(ConditioningMethod):
         self.rmin = kwargs.get('rmin', 0.)
         self.Znorm = kwargs.get('Znorm', 196608.)
         self.clamp_r = kwargs.get('clamp_r', 10.)
+        self.beta_2 = 0.9 # track rounding factor
+        self.prev_Z = None
 
     def grad_and_value(self, x_prev, x_0_hat, measurement, beta, **kwargs):
-        # Z = 3 * 256 * 256 / 5
 
         with torch.no_grad():
             x_ref = x_0_hat.detach()
             if self.noiser.__name__ == 'gaussian':
                 Z = measurement - self.operator.forward(x_ref, **kwargs)
                 Z = torch.linalg.norm(Z) ** 2
-                r = torch.clamp(torch.sqrt(Z / self.Znorm), min=self.rmin)
+                norm_base = Z.detach_()
+                if self.prev_Z == None:
+                    self.prev_Z = Z
+                Z = self.beta_2 * self.prev_Z + (1 - self.beta_2) * Z
+                self.prev_Z = Z
+                # r = torch.clamp(torch.sqrt(Z / self.Znorm), min=self.rmin)--super resolution*4
+                r = torch.clamp(torch.sqrt(Z / self.Znorm) / 2, min=self.rmin)
             else:
                 Z = measurement - self.operator.forward(x_ref, **kwargs)
                 Z = torch.sum(Z.abs())
@@ -193,22 +201,21 @@ class PGSampling(ConditioningMethod):
         _, C, H, W = x_prev.shape
         x0 = r * torch.randn((self.mc, C, H, W), device=x_0_hat.device) + x_0_hat
         x0.detach_()
-        # x0 = torch.clamp(x0, min=-1, max=1)
 
         with torch.no_grad():
             if self.mc <= 1000: difference = measurement - self.operator.forward(x0, **kwargs)
             else: difference = torch.cat([(measurement - self.operator.forward(x_batch, **kwargs)) for x_batch in x0.chunk(20)])
             if self.noiser.__name__ == 'gaussian':
-                p_0l = torch.exp(- torch.abs((torch.linalg.norm(difference, dim=(1, 2, 3))**2) - self.bias) / Z) # for Gaussian Distribution
+                err_norms = torch.linalg.norm(difference, dim=(1, 2, 3)) ** 2 - norm_base
+                p_0l = torch.exp( - err_norms / Z )
             else:
                 p_0l = torch.exp(- torch.sum(difference.abs(), dim=(1, 2, 3)) / Z)
             pB = (torch.sum(p_0l) - p_0l) / (self.mc - 1)
             pB.detach_()
-        log_q0t = torch.linalg.norm((x0 - x_0_hat), dim=(1, 2, 3))**2
+            b_norm = torch.mean(p_0l)
+        log_q0t = torch.linalg.norm((x0 - x_0_hat), dim=(1, 2, 3))**2 / (2 * r * r)
         loss = torch.mean((p_0l-pB) * log_q0t)
         x_t_grad = torch.autograd.grad(outputs=loss, inputs=x_prev)[0]
-        p_mean = p_0l.mean().cpu().detach().item()
-        del x0, difference, p_0l, pB, log_q0t, loss
 
         if self.prev_grad == None:
             self.prev_grad = x_t_grad
@@ -216,33 +223,23 @@ class PGSampling(ConditioningMethod):
             tmp_grad = x_t_grad
         else:
             tmp_grad = x_t_grad
-            # x_t_grad = self.beta * self.prev_grad + (1 - self.beta) * tmp_grad
             x_t_grad = self.beta * beta * self.prev_grad + (1 - self.beta * beta) * tmp_grad
             self.prev_grad = tmp_grad
-            # self.grad_scale = 0.5 * self.grad_scale + 0.5 * tmp_grad.norm()
 
+        # for AISTATS submission, rounding using C
         grad = x_t_grad / (x_t_grad.norm()+1e-7)
-        # grad += torch.randn_like(grad) * 0.01
-        # grad = x_t_grad / (self.grad_scale + 1e-7)
-        # grad = x_t_grad / (0.5 * self.prev_grad.norm() + 0.5 * tmp_grad.norm()+1e-7)
-        # # import pdb
-        # # pdb.set_trace()
-        # print(norm_grad.norm(), r, loss)
+        # for AISTATS rebuttal, normalizing using Ep_l
         with torch.no_grad():
             difference = measurement - self.operator.forward(x_0_hat, **kwargs)
-            # norm = torch.linalg.norm(difference)
             norm = torch.linalg.norm(difference, dim=(1, 2, 3)).mean()
 
         return {'x_t_grad': grad, 'norm': norm,
                 'Z': Z,
-                'grad_norm': x_t_grad.norm().item(),
-                'r': r,
-                'p0l': p_mean}
+                'grad_norm': grad.norm().item(),
+                'r': r}
 
-    def conditioning(self, x_prev, x_t, x_0_hat, measurement, eta, beta, **kwargs):
+    def conditioning(self, x_prev, x_t, x_0_hat, measurement, eta, beta, r, **kwargs):
         outs = self.grad_and_value(x_prev=x_prev, x_0_hat=x_0_hat, measurement=measurement, beta=beta, **kwargs)
-        # mv_eta = min(self.scale, (outs['r'] * 3 * 256 * 256))
-        # x_t -= mv_eta * outs['x_t_grad']
         x_t -= self.scale * eta * outs['x_t_grad']
         norm = outs['norm']
         return x_t, norm, outs

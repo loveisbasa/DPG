@@ -105,8 +105,12 @@ def main():
     # Working directory
     if measure_config['operator']['name'] == 'inpainting':
         task_name = 'inpainting_' + measure_config['mask_opt']['mask_type']
+    elif measure_config['operator']['name'] == 'super_resolution':
+        task_name = 'sr_' + str(measure_config['operator']['scale_factor'])
     else:
         task_name = measure_config['operator']['name']
+    # import pdb
+    # pdb.set_trace()
     out_path = os.path.join(args.save_dir, task_name+'_'+task_config['data']['name']+'_'+task_config['conditioning']['method'])
     os.makedirs(out_path, exist_ok=True)
     for img_dir in ['input', 'recon', 'progress', 'label']:
@@ -119,7 +123,7 @@ def main():
     if task_config['data']['name'] == 'ffhq' or task_config['data']['name'] == 'exp':
         transform = transforms.Compose([transforms.ToTensor(),
                                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-    elif task_config['data']['name'] == 'imagenet':
+    elif task_config['data']['name'] == 'imagenet' or task_config['data']['name'] == 'uscsipi':
         def rescale(image): return (image - 0.5) * 2.
         transform = transforms.Compose([transforms.Resize(256),
                                         transforms.CenterCrop((256, 256)),

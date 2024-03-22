@@ -1,0 +1,38 @@
+conditioning:
+  # method: ps
+  # params:
+  #   scale: 0.6
+
+  # # for Poisson noise DDPM, very good!
+  method: pg
+  params:
+    scale: 100
+    mc: 3000
+
+  # ddim
+  # method: pg
+  # params:
+  #   scale: 200.
+  #   mc: 500
+  #   beta: 0.
+  #   bias: 0.
+  #   rmin: 0.05
+
+
+
+data:
+  name: lsun
+  root: /home/tanghaoyue13/dataset/LSUN-bedroom
+
+
+measurement:
+  operator:
+    name: motion_blur
+    kernel_size: 61
+    intensity: 0.5
+
+  noise:
+    # name: poisson
+    # rate: 1.0
+    name: gaussian
+    sigma: 0.05

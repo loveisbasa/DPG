@@ -1,33 +1,31 @@
 conditioning:
+  # for poisson
   # method: ps
   # params:
-  #   scale: 0.3
+  #   scale: 0.2
 
-  # for DDIM
+  # # for Gaussian noise DDPM
   # method: pg
   # params:
-  #   scale: 10.
+  #   scale: 200.
   #   mc: 500
   #   beta: 0.
   #   bias: 0.
+  #   rmin: 0.05
 
-  # for DDPM, very good!
+  # ddim
   method: pg
   params:
-    scale: 200.
-    mc: 500
+    scale: 100.
+    mc: 4000
     beta: 0.
     bias: 0.
     rmin: 0.05
-
-    # scale 200, Lpips 255
-    # scale 100, Lpips 266
 
 
 
 data:
   name: imagenet
-  # root: ./data/samples/
   root: /home/tanghaoyue13/dataset/dataset
 
 

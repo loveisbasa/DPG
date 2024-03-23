@@ -1,16 +1,30 @@
 conditioning:
-  method: ps
+  # method: ps
+  # params:
+  #   scale: 1.
+  method: mcg
   params:
-    scale: 0.4
+    scale: 1.
+
+  # imagenet dataset
+  # scale 200, mc 200, first figure 0.56
+  # scale 250, mc 200, first figure 0.57
+  # scale 250, mc 200, first figure 0.55
+  # scale 150, mc 500, first figure 0.56
+  # scale 250, mc 200, first figure 0.58
   # method: pg
   # params:
-  #   scale: 150.
-  #   mc: 500
+  #   scale: 250.
+  #   mc: 200
   #   beta: 0.
 
 data:
-  name: ffhq
-  root: /home/tanghaoyue13/dataset/ffhqvaldps
+  name: imagenet
+  root: /home/tanghaoyue13/dataset/dataset
+  # name: lsun
+  # root: /home/tanghaoyue13/dataset/LSUN-bedroom
+  # name: ffhq
+  # root: /home/tanghaoyue13/dataset/ffhqvaldps
 
   # root: ./data/samples/
 
